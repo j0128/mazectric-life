@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>生存遊戲 v3.8 · Mazectric</title>
+      <link rel="stylesheet" href="css/game.css">
+    </head>
+    <body>
+      <div id="app">
+        <header class="topbar">
+          <div class="title-block">
+            <h1>生存遊戲 <span class="ver" id="game-version">v3.8</span></h1>
+            <p>Mazectric 生命 · 演化殖民地　誕生 3 · 存活隨地形</p>
+          </div>
+      <div class="hud">
+        <div class="stat">
+          <span class="stat-label">代數</span>
+          <span class="stat-value" id="stat-gen">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">群落</span>
+          <span class="stat-value" id="stat-pop">0</span>
+        </div>
+        <div class="stat food">
+          <span class="stat-label">糧食（你）</span>
+          <span class="stat-value" id="stat-food">40</span>
+        </div>
+        <div class="stat energy">
+          <span class="stat-label">能量</span>
+          <span class="stat-value" id="stat-energy">30</span>
+        </div>
+        <div class="stat climate" id="stat-climate-wrap">
+          <span class="stat-label">氣候</span>
+          <span class="stat-value" id="stat-climate">溫暖 · 32</span>
+        </div>
+        <div class="stat civ">
+          <span class="stat-label">聚落</span>
+          <span class="stat-value" id="stat-civ">0</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="stage">
+        <canvas id="board" tabindex="0"></canvas>
+        <div id="toast" class="toast hidden"></div>
+      </section>
+
+      <aside class="side">
+        <section class="panel">
+          <h2>圖章</h2>
+          <p class="hint">點選後在地圖上蓋下。費用等於活細胞數。R 旋轉。單格仍會死，請至少種兩格相鄰。</p>
+          <div id="stamp-list" class="stamp-list"></div>
+        </section>
+
+        <section class="panel" id="faction-panel">
+          <h2>
+            文明
+            <button id="btn-chronicle" type="button">大事紀</button>
+          </h2>
+          <p class="hint">你是文明一。客族依出現順序為第二、第三、第四…文明。同族多鎮算同一個文明。還在的排上面，滅亡的排後面；曾立國再滅的用金框標出。大疫時會標「疫」。</p>
+          <div id="faction-list" class="faction-list"></div>
+        </section>
+
+        <section class="panel">
+          <h2>圖鑑</h2>
+          <p class="hint">首次目擊或親手蓋過會亮起。場上有構型時技能會自己觸發。</p>
+          <div id="gallery-list" class="gallery-list"></div>
+        </section>
+
+        <section class="panel legend">
+          <h2>地形</h2>
+          <ul>
+            <li><i class="swatch soil"></i>土壤 · 未開發疏林綠 · 誕生 3 · 存活 1–4 · 乾旱收成 1–3</li>
+            <li><i class="swatch fertile"></i>沃土 · 較亮的草地 · 湖岸延續 · 存活 1–5 · 乾旱仍可 4 · 較省糧</li>
+            <li><i class="swatch rock"></i>岩石 · 無法生存 · 鄰格乾旱不收緊</li>
+            <li><i class="swatch water"></i>大海／湖 · 近岸有寒暖流；寒流岸較旱、暖流岸較潤。平時淹死；舊岸鎮可能在淺海落下筏屋</li>
+            <li><i class="swatch river"></i>河流 · 從高處流入湖海 · 平時淹死</li>
+            <li><i class="swatch ice"></i>冰面 · 冬季河凍，可走可種；解凍淹死</li>
+            <li><i class="swatch highland"></i>高地 · 褐灰山脊 · 較耐旱，洪水淹不到</li>
+            <li><i class="swatch snow"></i>雪山 · 不能住，是河的源頭</li>
+            <li><i class="swatch sand"></i>沙漠 · 山背風雨影或寒流岸 · 存活 1–3 · 乾旱更瘦、會脹；雨季縮邊</li>
+            <li><i class="swatch marsh"></i>澤地 · 迎風偏濕 · 湖洪不立刻死 · 怕旱</li>
+            <li><i class="swatch grove"></i>林地 · 密林濃綠 · 較好活略省糧 · 鄰居 2 也可能誕生</li>
+            <li><i class="swatch nutrient"></i>養分 · 無人地會堆高 · 踩到旁生 1～3 格</li>
+            <li><i class="swatch crystal"></i>結晶 · 堆越大糧越多 · 荒地慢慢長</li>
+            <li><i class="swatch ruin"></i>遺址 · 聚落滅亡的 2×2 爐芯，佔領 +8 糧、+3 能。無人時旁邊會慢慢長林與沃土</li>
+            <li>構型技能會自己觸發：方塊窖藏、長廊耐旱、拐角發芽、短蛇避水</li>
+            <li>連通 12 格且含實心 2×2 成為聚落；活滿 30 代依經歷可能學會深倉／堤防／登高／抗災／拓殖／航海</li>
+            <li>活滿 80 代或繼承三次會強化，並依經歷另學記旱／歲祀／回爐／加護／城垣</li>
+            <li>登高：雨季末期往岩邊、離水處撤。堤防：留下守岸。城垣：長廊成牆，擋災變與搶糧，地震先砸牆和屋</li>
+            <li>有特質的鎮會自己分家；冬天貼河的鎮可能沿冰過河。幼苗一時不怕弱災，走廊也可能自己冒出爐芯</li>
+            <li>有特質的鎮也會派短蛇商隊；河流平時擋路，冰上才能把火種送到對岸</li>
+            <li>各族各自一袋糧食；頂欄是文明一的倉。走廊較省、鎮在沃土／林／澤會慢慢回倉。饑了只刮自己的人，不連坐他族。食量按本族人口算。結晶進踩到那格的文明。能量仍共用、用來蓋章</li>
+            <li>天災抹無結構的小團（不到 8 格且沒 2×2）；方塊、長廊、拐角、短蛇可擋</li>
+            <li>極端氣候可能拆聚落，各族會留下最後一座；地震則先砸房屋與城垣，留下遺址</li>
+            <li>滾輪放大地圖、中鍵拖曳平移。新一局重擲這顆星的高度、河網與季風。開場可選小 200×120、中 320×192、大 400×240</li>
+            <li>岸邊聚落會慢慢改河道；內陸湖可能因取水縮小成澤地。大海不會被抽乾。開局河網較疏，斷頭短河會填成土。舊鎮可填內陸河（河口不填，堤防較勤），斷流後大雨可能再開</li>
+            <li>河口會自己淤成灘地；舊鎮也可填 1 格淺海成澤（堤防／拓殖較勤）。地震有時從淺海噴出小島；深海不會變成陸</li>
+            <li>岸邊聚落自己放小船，水上活一陣子再登對岸。有特質的岸鎮放船稍勤。學會航海、岸鎮夠大時會派出船團：三支同族登陸隊，一代只走一格，二十代內必須靠岸；不佔商隊上限。住很久的岸鎮，偶爾會在淺海落下筏屋，水上也能誕生、可能成一小團水鎮；深海仍淹死。洪水會打散一部分船團，不是全滅</li>
+            <li>久住且染色深的鎮可能把山邊岩石住成高地、再開成田；再久一點，偶爾會在岩脊開出一格高地山口。雪山與裸岩仍不能住</li>
+            <li>山上改道的河會帶河險。沒堤防時洪水季可能決口；有堤防則擋住山洪。登高不能擋這個</li>
+            <li>冬季近岸結冰；偶爾小冰期連淺海也凍，可沿冰過海</li>
+            <li>土地曾被某族發展會留下淡色；常住則深，荒廢則淡。城鎮附近較容易補資源</li>
+            <li>同族若有兩座鎮，饑了或田瘦的舊址可能自己荒掉，留下爐芯。歲祀的人有時回舊爐上香；記旱／歲祀偶爾在大事紀裡講一句記得的事</li>
+            <li>同族兩座鎮或人口達 40 成為王國（較抗災，人多更燒糧）。再久且有深倉／歲祀／記旱可成帝國，較能養人但仍會饑、會打。側欄活著的文明在上、滅亡的在下；曾立王國或帝國再滅的用金框標出</li>
+            <li>偶爾某一族會碰上大疫（側欄標「疫」，可過邊境）或倉中生霉（瞬間少一大截糧並連饑）。另一類是地圖上的大破壞：某地強震圈內抽掉一批居民；久久一次颱風沿路徑掃過，只有方塊房屋能留，放大看得到雨絲</li>
+            <li>長局長局才可能碰上紀年災，進了年代窗口會擲一次、不一定發生：約兩千代火山造山（強震、焰口暫時不能住、岸上海嘯、全球中冰期百代以上，冷卻後焰口變高地可住）；約六千代全球酷熱或嚴寒；約八千代起山脊可能慢慢東移或西移</li>
+            <li>每輪五季會重擲年候：多雨年洪水暫淹較寬淺岸（季末退）；旱年洪水較小、乾旱走廊略瘦。雨季或乾旱偶爾蟲疾，畫面發綠、走廊略瘦，房屋方塊仍不吃</li>
+            <li>季節與年候會改地圖顏色（濾鏡較淡）。坡向有明暗；放大才看得到浪、沫與粒理。未開發是較亮疏林、深密林、褐灰山脊。沙漠在山背風或寒流岸成帶，核偏黃、邊偏褐土；乾旱脹、雨季縮邊。近岸海色分寒青／暖綠。文明染色較實，聚落有深邊。河偏青綠。乾旱時河會縮成一線，雨季再來。多雨年海面漲、旱年潮退。雨季季風偶爾轉向。林迎風往前。冬季偏冷白，多雨年偏藍，旱年偏黃</li>
+            <li>洪水過後低地可能走成短河，接不到出口則積成澤地。多雨年較常發生</li>
+            <li>成熟文明可能出君主，只有性格詞條（仁政、多子、統領征戰、奢侈…）。異族會爭邊；同族也可能內戰分號</li>
+          </ul>
+        </section>
+      </aside>
+    </main>
+
+    <div id="chronicle" class="chronicle hidden">
+      <div class="chronicle-card">
+        <header>
+          <h2 id="chronicle-title">大事紀</h2>
+          <button id="chronicle-close" type="button">關閉</button>
+        </header>
+        <ol id="chronicle-list"></ol>
+      </div>
+    </div>
+
+    <footer class="toolbar">
+      <button id="btn-play" class="primary" type="button">播放</button>
+      <button id="btn-step" type="button">單步</button>
+      <label class="speed">
+        速度
+        <input id="speed" type="range" min="1" max="10" value="5">
+      </label>
+      <button id="btn-scatter" type="button">隨機散種</button>
+      <button id="btn-clear" type="button">清空生命</button>
+      <button id="btn-new" type="button">新一局</button>
+      <button id="btn-size" type="button">改格子</button>
+      <p class="status" id="status">左鍵種植，右鍵擦除。空格播放／暫停。</p>
+    </footer>
+  </div>
+
+  <div id="size-overlay" class="size-overlay">
+    <div class="size-card">
+      <h2>選擇地圖大小</h2>
+      <p>格子越多岸線越細，演化也越慢。可隨時按「改格子」重選。</p>
+      <div id="size-choices" class="size-choices"></div>
+      <button id="size-cancel" type="button" class="size-cancel hidden">取消</button>
+    </div>
+  </div>
+
+  <script src="js/version.js"></script>
+  <script src="js/patterns.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/gallery.js"></script>
+  <script src="js/civ.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
