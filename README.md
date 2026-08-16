@@ -4,7 +4,7 @@
 
 ## 直接玩
 
-開 https://j0128.github.io/mazectric-life/ 即可玩（每人自己一局，不是多人同圖）。
+開 https://j0128.github.io/mazectric-life/ 即可玩（每人自己一局，不是多人同圖）。要放到 Google 協作平台：插入 → 嵌入，貼同一個網址。
 
 本機可雙擊 `視窗版.bat`（獨立視窗，切走仍會演化），或用瀏覽器開 `index.html`。
 
