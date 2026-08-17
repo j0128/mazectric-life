@@ -128,6 +128,7 @@
       nextNpcOwner: 1,
       ruinSites: [],
       caravans: [],
+      tollPeace: {},
       extremeTint: 0,
       quakeTint: 0,
       pestTint: 0,
@@ -150,11 +151,15 @@
       epochVolcanoAt: 1820 + Math.floor(Math.random() * 361),
       epochClimateAt: 5750 + Math.floor(Math.random() * 501),
       epochDriftAt: 7800 + Math.floor(Math.random() * 401),
+      epochShoreAt: 9800 + Math.floor(Math.random() * 601),
       epochVolcano: "pending",
       epochClimate: "pending",
       epochDrift: "pending",
+      epochShore: "pending",
       volcanoMiss: 0,
       glacialLeft: 0,
+      coastRecedeLeft: 0,
+      swampAgeLeft: 0,
       calderaCoolLeft: 0,
       caldera: {},
       climateKind: null,
@@ -812,7 +817,7 @@
   }
 
   function isMajorEvent(text) {
-    return /學會|工藝|越山|聚落形成|極端|地震|佔領遺址|因糧|過河|分家|出走|而遷|爐芯|王國|帝國|滅亡|全部消失|遠方出現|繼承了火種|之主|內戰|衝突|海底|火山|河口淤|開出田|土坡|山洪|決口|舊鎮荒了|離開了舊址|舊址生出|上香|還記得|歲祀的人說|舊爐還有人記得|多雨年|旱年|蟲疾|填了一段河|低地走成|積水成川|積了水|河枯成一線|乾河又來了水|海面漲了|潮退露出灘|季風轉向|林往前長|沙埋了地|填了一小塊海|海上有人住下來|船團散了|開出一條山口|船團|航海|大疫|倉中生霉|強震|颱風|疫過了邊境|中冰期|冷卻|酷熱|嚴寒|山脈|火山爆發|海嘯打上|年候將亂|地要裂|併入|散族|分鎮散了|諸部離散|開出田糧|山沒裂/.test(
+    return /學會|工藝|越山|涉水|林棲|聚落形成|極端|地震|佔領遺址|因糧|過河|分家|出走|而遷|爐芯|王國|帝國|滅亡|全部消失|遠方出現|繼承了火種|之主|內戰|衝突|海底|火山|河口淤|開出田|土坡|山洪|決口|舊鎮荒了|離開了舊址|舊址生出|上香|還記得|歲祀的人說|舊爐還有人記得|多雨年|旱年|蟲疾|填了一段河|低地走成|積水成川|積了水|河枯成一線|乾河又來了水|海面漲了|潮退露出灘|季風轉向|林往前長|沙埋了地|填了一小塊海|海上有人住下來|船團散了|開出一條山口|船團|航海|大疫|倉中生霉|強震|颱風|疫過了邊境|中冰期|冷卻|酷熱|嚴寒|山脈|火山爆發|海嘯打上|年候將亂|地要裂|併入|散族|分鎮散了|諸部離散|開出田糧|山沒裂|過路留糧|岸將遷|岸線大退|湖沼擴張|岸線漸漸|湖沼退了/.test(
       text || ""
     );
   }
@@ -1216,6 +1221,7 @@
       const i = list[k];
       const t = game.terrain[i];
       if (t !== TERRAIN.WATER && t !== TERRAIN.RIVER) continue;
+      if (t === TERRAIN.RIVER && inPlaceMask(game, "fordMask", i)) continue;
       if (game.dikeCells && game.dikeCells[i]) continue;
       if (game.raftCells && game.raftCells[i]) continue;
       return true;
@@ -1254,7 +1260,9 @@
             if (ownerOf(game, ni) !== who) continue;
             const nt = game.terrain[ni];
             if (nt === TERRAIN.SNOW) continue;
-            if (nt === TERRAIN.ROCK && !inAlpine(game, ni)) continue;
+            if (nt === TERRAIN.ROCK && !inPlaceMask(game, "alpineMask", ni)) continue;
+            if (nt === TERRAIN.WATER && !(game.raftCells && game.raftCells[ni]) && !(game.dikeCells && game.dikeCells[ni])) continue;
+            if (nt === TERRAIN.RIVER && !inPlaceMask(game, "fordMask", ni) && !(game.dikeCells && game.dikeCells[ni]) && !(game.driedRiver && game.driedRiver[ni])) continue;
             seen[ni] = 1;
             stack.push(ni);
           }
@@ -1332,20 +1340,24 @@
     }
   }
 
-  function inAlpine(game, i) {
-    return !!(game.alpineMask && game.alpineMask[i]);
+  function inPlaceMask(game, key, i) {
+    return !!(game[key] && game[key][i]);
   }
 
-  function refreshAlpineMask(game) {
+  function inAlpine(game, i) {
+    return inPlaceMask(game, "alpineMask", i);
+  }
+
+  function fillPlaceMask(game, maskKey, flag) {
     const n = (game.life && game.life.length) || 0;
     if (!n) {
-      game.alpineMask = null;
+      game[maskKey] = null;
       return;
     }
-    if (!game.alpineMask || game.alpineMask.length !== n) game.alpineMask = new Uint8Array(n);
-    else game.alpineMask.fill(0);
+    if (!game[maskKey] || game[maskKey].length !== n) game[maskKey] = new Uint8Array(n);
+    else game[maskKey].fill(0);
     (game.settlements || []).forEach(function (s) {
-      if (!s.alpine) return;
+      if (!s[flag]) return;
       const ox = Math.round(s.cx);
       const oy = Math.round(s.cy);
       for (let dy = -ALPINE_R; dy <= ALPINE_R; dy++) {
@@ -1354,31 +1366,72 @@
         for (let dx = -ALPINE_R; dx <= ALPINE_R; dx++) {
           if (dx * dx + dy * dy > ALPINE_R * ALPINE_R) continue;
           const x = W.wrap(ox + dx, game.cols);
-          game.alpineMask[W.idx(x, y, game.cols)] = 1;
+          game[maskKey][W.idx(x, y, game.cols)] = 1;
         }
       }
     });
   }
 
-  function tryAlpine(game, settl, events) {
-    if (!settl || settl.alpine) return;
+  function refreshAlpineMask(game) {
+    fillPlaceMask(game, "alpineMask", "alpine");
+    fillPlaceMask(game, "fordMask", "ford");
+    fillPlaceMask(game, "groveMask", "groveWalk");
+  }
+
+  function tryPlaceSkill(game, settl, events, flag, needFn, label) {
+    if (!settl || settl[flag]) return;
     if ((settl.age || 0) < ALPINE_AGE) return;
-    if (settl.alpineIn != null && (settl.age || 0) < settl.alpineIn) return;
-    const mem = settl.memory || emptyMemory();
-    if ((mem.nearRock || 0) < 8) return;
-    let high = 0;
-    (settl.list || []).forEach(function (i) {
-      if (!game.life[i]) return;
-      const t = game.terrain[i];
-      if (t === TERRAIN.HIGHLAND || t === TERRAIN.ROCK) high += 1;
-    });
-    if (high < 2 && (mem.nearRock || 0) < 14) return;
+    const waitKey = flag + "In";
+    if (settl[waitKey] != null && (settl.age || 0) < settl[waitKey]) return;
+    if (!needFn(game, settl)) return;
     if (Math.random() < 0.55) {
-      settl.alpine = 1;
-      events.push("一座聚落學會了越山");
+      settl[flag] = 1;
+      events.push("一座聚落學會了" + label);
     } else {
-      settl.alpineIn = (settl.age || 0) + ALPINE_RETRY;
+      settl[waitKey] = (settl.age || 0) + ALPINE_RETRY;
     }
+  }
+
+  function tryAlpine(game, settl, events) {
+    tryPlaceSkill(game, settl, events, "alpine", function (g, s) {
+      const mem = s.memory || emptyMemory();
+      if ((mem.nearRock || 0) < 8) return false;
+      let high = 0;
+      (s.list || []).forEach(function (i) {
+        if (!g.life[i]) return;
+        const t = g.terrain[i];
+        if (t === TERRAIN.HIGHLAND || t === TERRAIN.ROCK) high += 1;
+      });
+      return high >= 2 || (mem.nearRock || 0) >= 14;
+    }, "越山");
+  }
+
+  function tryFord(game, settl, events) {
+    tryPlaceSkill(game, settl, events, "ford", function (g, s) {
+      const mem = s.memory || emptyMemory();
+      if ((mem.nearWater || 0) < 10) return false;
+      let wet = 0;
+      (s.list || []).forEach(function (i) {
+        if (!g.life[i]) return;
+        const x = i % g.cols;
+        const y = (i - x) / g.cols;
+        if (cellTouchesWet(g, x, y)) wet += 1;
+      });
+      return wet >= 3;
+    }, "涉水");
+  }
+
+  function tryGroveWalk(game, settl, events) {
+    tryPlaceSkill(game, settl, events, "groveWalk", function (g, s) {
+      const mem = s.memory || emptyMemory();
+      let lush = 0;
+      (s.list || []).forEach(function (i) {
+        if (!g.life[i]) return;
+        const t = g.terrain[i];
+        if (t === TERRAIN.GROVE || t === TERRAIN.MARSH) lush += 1;
+      });
+      return lush >= 4 || (mem.lush || 0) >= 12;
+    }, "林棲");
   }
 
   function withLineage(settl, src) {
@@ -1397,6 +1450,10 @@
     settl.riteVisitIn = src.riteVisitIn != null ? src.riteVisitIn : 28 + Math.floor(Math.random() * 20);
     settl.alpine = src.alpine ? 1 : 0;
     settl.alpineIn = src.alpineIn;
+    settl.ford = src.ford ? 1 : 0;
+    settl.fordIn = src.fordIn;
+    settl.groveWalk = src.groveWalk ? 1 : 0;
+    settl.groveWalkIn = src.groveWalkIn;
     return settl;
   }
 
@@ -1477,6 +1534,8 @@
       tryCraft(game, settl, events);
       tryLegacy(game, settl, events);
       tryAlpine(game, settl, events);
+      tryFord(game, settl, events);
+      tryGroveWalk(game, settl, events);
       if (settl.legacy === "rite" && settl.age % 16 === 0) {
         const who = settl.owner || 0;
         let gift = Math.min(6, Math.max(1, Math.floor(settl.size / 8)));
@@ -1532,6 +1591,8 @@
         tryCraft(game, settl, events);
         tryLegacy(game, settl, events);
         tryAlpine(game, settl, events);
+        tryFord(game, settl, events);
+        tryGroveWalk(game, settl, events);
         if (settl.age && settl.age % (hasFarm(game, settl) ? 4 : 8) === 0) harvestTown(game, settl);
         if (settl.age && settl.age % 6 === 0) craftTownYield(game, settl);
         next.push(settl);
@@ -2130,6 +2191,7 @@
     let terra = spec.food == null ? 1 : spec.food;
     if (spec.dead) terra = 0;
     if (alpine && tt === TERRAIN.ROCK) terra = 1.2;
+    if (inPlaceMask(game, "fordMask", i) && tt === TERRAIN.RIVER) terra = 1.15;
     const s = game.civCells && game.civCells[i];
     let w = terra;
     if (s) {
@@ -3141,6 +3203,7 @@
     for (let k = 0; k < take; k++) {
       const h = hits[Math.floor(Math.random() * hits.length)];
       let chance = 0.12;
+      if (haveTollPeace(game, h.a, h.b)) chance *= 0.35;
       if (ownerHasCraft(game, h.a, "copper") || ownerHasCraft(game, h.b, "copper")) chance += 0.1;
       if (hasHeroTag(game, h.a, "warlord") || hasHeroTag(game, h.a, "endless")) chance += 0.1;
       if (hasHeroTag(game, h.b, "warlord") || hasHeroTag(game, h.b, "endless")) chance += 0.06;
@@ -3718,10 +3781,47 @@
           return;
         }
       }
+      tryCaravanToll(game, c, events);
       keep.push(c);
     });
     game.caravans = keep;
     return events;
+  }
+
+  function tollPair(a, b) {
+    return a < b ? a + ":" + b : b + ":" + a;
+  }
+
+  function haveTollPeace(game, a, b) {
+    const until = game.tollPeace && game.tollPeace[tollPair(a, b)];
+    return until != null && (game.generation || 0) < until;
+  }
+
+  function tryCaravanToll(game, caravan, events) {
+    if (!caravan || caravan.tolled) return;
+    if (caravan.kind === "raid" || caravan.kind === "fleet" || caravan.kind === "boat") return;
+    const who = caravan.owner || 0;
+    if (isHungry(game, who) || foodOf(game, who) < 8) return;
+    let host = null;
+    (game.settlements || []).forEach(function (s) {
+      if ((s.owner || 0) === who) return;
+      const sx = Math.round(s.cx);
+      const sy = Math.round(s.cy);
+      (caravan.cells || []).forEach(function (i) {
+        if (!game.life[i] || host) return;
+        const x = i % game.cols;
+        const y = (i - x) / game.cols;
+        if (wrapDelta(x, sx, game.cols) + distY(y, sy) <= 4) host = s;
+      });
+    });
+    if (!host) return;
+    const gift = 2 + Math.floor(Math.random() * 3);
+    spendFood(game, who, gift);
+    addFood(game, host.owner || 0, gift);
+    caravan.tolled = 1;
+    if (!game.tollPeace) game.tollPeace = {};
+    game.tollPeace[tollPair(who, host.owner || 0)] = (game.generation || 0) + 24;
+    if (Math.random() < 0.6) events.push("過路留糧");
   }
 
   function distToWet(game, x, y) {
@@ -4245,6 +4345,8 @@
     tickGlacialFood: tickGlacialFood,
     refreshAlpineMask: refreshAlpineMask,
     inAlpine: inAlpine,
+    ALPINE_R: ALPINE_R,
+    ownerHasCraft: ownerHasCraft,
     hasHeroTag: hasHeroTag,
     isEmpireOwner: isEmpireOwner,
     densityScale: densityScale,

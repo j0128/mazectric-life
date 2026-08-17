@@ -427,6 +427,19 @@ button, input {
   padding-bottom: 10px;
 }
 
+.chronicle-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.chronicle-tools button.on {
+  background: #8a6234;
+  color: #fff6df;
+  border-color: #6e4a22;
+}
+
 .chronicle-card h2 {
   font-size: 18px;
   letter-spacing: 0.28em;

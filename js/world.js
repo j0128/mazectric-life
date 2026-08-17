@@ -258,6 +258,9 @@
     if (game.epochOmen === "volcano") parts.push("地裂兆");
     if (game.epochOmen === "climate") parts.push("年候兆");
     if (game.epochOmen === "drift") parts.push("山移兆");
+    if (game.epochOmen === "shore") parts.push("岸遷兆");
+    if (game.coastRecedeLeft) parts.push("岸退");
+    if (game.swampAgeLeft) parts.push("湖沼");
     const m = game.monsoon;
     const sid = (SEASONS[game.season] || {}).id;
     if (!game.glacialLeft && sid === "winter" && game.iceAge) parts.push("小冰期");
@@ -823,17 +826,27 @@
     const nuts = Math.min(Math.round(160 * areaMul), 32 + Math.floor(area / 80));
     const crystals = Math.min(Math.round(56 * areaMul), 14 + Math.floor(area / 220));
     const resAmt = new Uint8Array(cols * rows);
+    const ore = new Uint8Array(cols * rows);
     for (let i = 0; i < nuts; i++) {
       placeResource(terrain, resources, null, cols, rows, RESOURCE.NUTRIENT, true, resAmt);
     }
     for (let i = 0; i < crystals; i++) {
       placeResource(terrain, resources, null, cols, rows, RESOURCE.CRYSTAL, true, resAmt);
     }
+    for (let i = 0; i < resources.length; i++) {
+      if (resources[i] !== RESOURCE.CRYSTAL) continue;
+      const x = i % cols;
+      const y = (i - x) / cols;
+      if ((terrain[i] === TERRAIN.HIGHLAND || isRockAdjacent(terrain, x, y, cols, rows)) && Math.random() < 0.38) {
+        ore[i] = 1;
+      }
+    }
 
     return {
       terrain: terrain,
       resources: resources,
       resAmt: resAmt,
+      ore: ore,
       height: height,
       monsoon: monsoon,
       monsoonBase: { dx: monsoon.dx, dy: monsoon.dy, label: monsoon.label, back: monsoon.back },
@@ -900,6 +913,7 @@
   function wipeRes(game, i) {
     game.resources[i] = RESOURCE.NONE;
     if (game.resAmt) game.resAmt[i] = 0;
+    if (game.ore) game.ore[i] = 0;
   }
 
   function restoreTerrain(game) {
@@ -1962,11 +1976,12 @@
     const origin = game.seaOrigin == null ? game.seaLevel : game.seaOrigin;
     const oldSea = game.seaLevel;
     let next = oldSea;
-    if (game.yearKind === "wet") next = oldSea + (2 + randInt(3));
+    if (game.coastRecedeLeft > 0) next = Math.min(next, oldSea - (1 + randInt(2)));
+    else if (game.yearKind === "wet") next = oldSea + (2 + randInt(3));
     else if (game.yearKind === "dry") next = oldSea - (2 + randInt(3));
     else if (oldSea > origin) next = oldSea - 1;
     else if (oldSea < origin) next = oldSea + 1;
-    next = Math.max(origin - 8, Math.min(origin + 8, next));
+    next = Math.max(origin - (game.coastRecedeLeft > 0 ? 14 : 8), Math.min(origin + 8, next));
     if (next === oldSea) return null;
     const lo = Math.min(oldSea, next);
     const hi = Math.max(oldSea, next);
@@ -2448,6 +2463,7 @@
         if (game.resources[i] && !game.resAmt[i]) game.resAmt[i] = 1;
       }
     }
+    if (!game.ore || game.ore.length !== game.resources.length) game.ore = new Uint8Array(game.resources.length);
     const cols = game.cols;
     const rows = game.rows;
     let max = Math.round(((SEASONS[game.season] || {}).maxRes || 80) * (cols * rows) / (200 * 120));
@@ -2506,8 +2522,12 @@
         crystal *= 0.4;
       }
       if (Math.random() > p) continue;
-      game.resources[i] = Math.random() < crystal ? RESOURCE.CRYSTAL : RESOURCE.NUTRIENT;
+      const kind = Math.random() < crystal ? RESOURCE.CRYSTAL : RESOURCE.NUTRIENT;
+      game.resources[i] = kind;
       game.resAmt[i] = 1;
+      if (kind === RESOURCE.CRYSTAL && (t === TERRAIN.HIGHLAND || isRockAdjacent(game.terrain, x, y, cols, rows)) && Math.random() < 0.38) {
+        game.ore[i] = 1;
+      }
       current++;
     }
   }
@@ -2723,6 +2743,36 @@
     }
   }
 
+  function fireEpochShore(game, events) {
+    if ((game.glacialLeft || 0) <= 0 && Math.random() < 0.5) {
+      game.coastRecedeLeft = 90 + Math.floor(Math.random() * 41);
+      game.yearKind = "dry";
+      const note = applyYearSea(game);
+      if (note) events.push(note);
+      events.push("岸線大退");
+      return;
+    }
+    game.swampAgeLeft = 80 + Math.floor(Math.random() * 41);
+    expandLowMarshes(game, 36);
+    events.push("湖沼擴張");
+  }
+
+  function expandLowMarshes(game, cap) {
+    if (!game.baseTerrain || !game.height) return 0;
+    const sea = game.seaLevel == null ? 100 : game.seaLevel;
+    let n = 0;
+    for (let k = 0; k < 220 && n < cap; k++) {
+      const i = randInt(game.baseTerrain.length);
+      const t = game.baseTerrain[i];
+      if (t !== TERRAIN.SOIL && t !== TERRAIN.FERTILE && t !== TERRAIN.GROVE) continue;
+      if (game.height[i] > sea + 6) continue;
+      if (Math.random() > 0.45) continue;
+      writeLand(game, i, TERRAIN.MARSH);
+      n += 1;
+    }
+    return n;
+  }
+
   function resolveEpochSlot(game, key, at, chance, coming, events) {
     const g = game.generation || 0;
     const st = game[key];
@@ -2732,6 +2782,7 @@
       if (Math.random() < chance) {
         game[key] = "coming";
         game.epochOmen = coming;
+        if (coming === "shore") events.push("岸將遷");
       } else if (key === "epochVolcano") {
         game.volcanoMiss = (game.volcanoMiss || 0) + 1;
         game.epochVolcano = "pending";
@@ -2749,6 +2800,7 @@
     game[key] = "fired";
     if (key === "epochVolcano") fireMegaVolcano(game, events);
     else if (key === "epochClimate") fireMegaClimate(game, events);
+    else if (key === "epochShore") fireEpochShore(game, events);
     else if (key === "epochDrift") {
       game.driftDx = Math.random() < 0.5 ? 1 : -1;
       events.push(game.driftDx > 0 ? "山脈開始往東蠕動" : "山脈開始往西蠕動");
@@ -2761,6 +2813,8 @@
     if (game.epochVolcanoAt == null) game.epochVolcanoAt = 1820 + Math.floor(Math.random() * 361);
     if (game.epochClimateAt == null) game.epochClimateAt = 5750 + Math.floor(Math.random() * 501);
     if (game.epochDriftAt == null) game.epochDriftAt = 7800 + Math.floor(Math.random() * 401);
+    if (!game.epochShore) game.epochShore = "pending";
+    if (game.epochShoreAt == null) game.epochShoreAt = 9800 + Math.floor(Math.random() * 601);
     if (game.epochVolcano === "skipped") {
       game.volcanoMiss = Math.max(game.volcanoMiss || 0, 1);
       game.epochVolcano = "pending";
@@ -2769,6 +2823,7 @@
     resolveEpochSlot(game, "epochVolcano", game.epochVolcanoAt, volcanoChance(game), "volcano", events);
     resolveEpochSlot(game, "epochClimate", game.epochClimateAt, 0.4, "climate", events);
     resolveEpochSlot(game, "epochDrift", game.epochDriftAt, 0.5, "drift", events);
+    resolveEpochSlot(game, "epochShore", game.epochShoreAt, 0.45, "shore", events);
     if ((game.glacialLeft || 0) > 0) {
       game.glacialLeft -= 1;
       game.iceAge = true;
@@ -2807,6 +2862,19 @@
       }
     }
     if (game.epochDrift === "fired") tickRidgeDrift(game, events);
+    if ((game.coastRecedeLeft || 0) > 0) {
+      game.coastRecedeLeft -= 1;
+      if (game.generation % 6 === 0) {
+        const note = applyYearSea(game);
+        if (note) events.push(note);
+      }
+      if (game.coastRecedeLeft <= 0) events.push("岸線漸漸回來了");
+    }
+    if ((game.swampAgeLeft || 0) > 0) {
+      game.swampAgeLeft -= 1;
+      if (game.generation % 5 === 0) expandLowMarshes(game, 8);
+      if (game.swampAgeLeft <= 0) events.push("湖沼退了一截");
+    }
     return events;
   }
 

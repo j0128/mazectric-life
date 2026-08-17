@@ -26,7 +26,25 @@
   const chronicleTitleEl = document.getElementById("chronicle-title");
   const btnChronicle = document.getElementById("btn-chronicle");
   const btnChronicleClose = document.getElementById("chronicle-close");
+  const btnChronicleFollow = document.getElementById("btn-chronicle-follow");
+  const btnChronicleHeadlines = document.getElementById("btn-chronicle-headlines");
   let focusedOwner = null;
+  let chronicleFollow = false;
+  let chronicleHeadlines = false;
+
+  const TERRAIN_ZH = {
+    0: "土壤",
+    1: "沃土",
+    2: "岩石",
+    3: "水",
+    4: "河",
+    5: "冰",
+    6: "沙",
+    7: "澤",
+    8: "林",
+    9: "高地",
+    10: "雪山",
+  };
 
   const TERRAIN_COLOR = {
     0: [88, 128, 62],
@@ -227,24 +245,117 @@
       .join("");
   }
 
+  function isHeadlineEvent(text) {
+    return /火山|山沒裂|中冰期|酷熱|嚴寒|山脈|王國|帝國|滅亡|全部消失|學會了越山|學會了涉水|學會了林棲|岸將遷|岸線大退|岸線漸漸|湖沼|過路留糧|遠方出現|之主|因饑|散族|併入|諸部離散|海嘯|年候將亂|地要裂/.test(
+      text || ""
+    );
+  }
+
+  function chronicleMentionsOwner(text, owner) {
+    const f = game.factions && game.factions[owner];
+    const n = f && f.n != null ? f.n : owner + 1;
+    const name = window.LifeCiv.civName(n);
+    if (!text) return false;
+    if (text.indexOf(name) >= 0) return true;
+    if (owner === 0 && /文明一/.test(text)) return true;
+    return false;
+  }
+
   function fillChronicle() {
     if (!chronicleListEl) return;
     const rows = game.chronicle || [];
     const season = engine.currentSeason(game);
     const year = (world.yearKindLabel && world.yearKindLabel(game)) || "平年";
+    let filtered = rows.slice();
+    if (chronicleFollow && focusedOwner != null) {
+      filtered = filtered.filter(function (row) {
+        return chronicleMentionsOwner(row.text, focusedOwner);
+      });
+    }
+    if (chronicleHeadlines) {
+      filtered = filtered.filter(function (row) {
+        return isHeadlineEvent(row.text);
+      });
+    }
+    const extra = [];
+    if (chronicleFollow) extra.push(focusedOwner != null ? "跟隨該族" : "尚未點側欄文明");
+    if (chronicleHeadlines) extra.push("只看大事件");
     const kicker =
-      "<li class=\"kicker\">本局 · " + year + " · " + season.name + "</li>";
-    if (!rows.length) {
-      chronicleListEl.innerHTML = kicker + "<li>還沒有大事。</li>";
+      "<li class=\"kicker\">本局 · " +
+      year +
+      " · " +
+      season.name +
+      (extra.length ? " · " + extra.join(" · ") : "") +
+      "</li>";
+    if (btnChronicleFollow) btnChronicleFollow.classList.toggle("on", chronicleFollow);
+    if (btnChronicleHeadlines) btnChronicleHeadlines.classList.toggle("on", chronicleHeadlines);
+    if (!filtered.length) {
+      chronicleListEl.innerHTML = kicker + "<li>還沒有符合的大事。</li>";
       return;
     }
     chronicleListEl.innerHTML =
       kicker +
-      rows
+      filtered
         .map(function (row) {
           return "<li><span>第 " + row.gen + " 代</span>" + row.text + "</li>";
         })
         .join("");
+  }
+
+  function skillName(id) {
+    const Civ = window.LifeCiv;
+    const spec = (Civ.TRAITS && Civ.TRAITS[id]) || (Civ.CRAFTS && Civ.CRAFTS[id]) || (Civ.LEGACIES && Civ.LEGACIES[id]);
+    return spec ? spec.name : id;
+  }
+
+  function townOfCell(i) {
+    if (game.civCells && game.civCells[i]) return game.civCells[i];
+    const towns = game.settlements || [];
+    for (let t = 0; t < towns.length; t++) {
+      if (towns[t].members && towns[t].members[i]) return towns[t];
+    }
+    return null;
+  }
+
+  function describeCell(x, y) {
+    if (!game || y < 0 || y >= game.rows) return "";
+    x = world.wrap(x, game.cols);
+    const i = world.idx(x, y, game.cols);
+    const parts = [x + "," + y, TERRAIN_ZH[game.terrain[i]] || "地"];
+    if (game.life[i]) {
+      const who = game.owner && game.owner[i] ? game.owner[i] : 0;
+      const f = game.factions && game.factions[who];
+      parts.push(window.LifeCiv.civName(f && f.n != null ? f.n : who + 1));
+    } else {
+      parts.push("空");
+    }
+    if (game.resources[i] === RESOURCE.NUTRIENT) parts.push("養分");
+    if (game.resources[i] === RESOURCE.CRYSTAL) parts.push(game.ore && game.ore[i] ? "礦" : "結晶");
+    const town = townOfCell(i);
+    if (town) {
+      const bag = [];
+      if (town.trait) bag.push(skillName(town.trait));
+      if (town.craft) bag.push(skillName(town.craft));
+      if (town.legacy) bag.push(skillName(town.legacy));
+      if (bag.length) parts.push(bag.join("/"));
+      const place = [];
+      if (town.alpine) place.push("越山");
+      if (town.ford) place.push("涉水");
+      if (town.groveWalk) place.push("林棲");
+      if (place.length) parts.push(place.join("、"));
+    } else {
+      const aura = [];
+      if (game.alpineMask && game.alpineMask[i]) aura.push("越山光環");
+      if (game.fordMask && game.fordMask[i]) aura.push("涉水光環");
+      if (game.groveMask && game.groveMask[i]) aura.push("林棲光環");
+      if (aura.length) parts.push(aura.join("、"));
+    }
+    return parts.join(" · ");
+  }
+
+  function applyInspect(x, y) {
+    const text = describeCell(x, y);
+    if (text) setStatus(text);
   }
 
   function openChronicle(title) {
@@ -298,6 +409,12 @@
       setStatus("災兆：年候將亂。全球會過熱或過冷。");
     } else if (game.epochOmen === "drift") {
       setStatus("災兆：山脈不安，脊線將開始挪動。");
+    } else if (game.epochOmen === "shore") {
+      setStatus("災兆：岸將遷。海面可能大退，或低地變成湖沼。");
+    } else if (game.coastRecedeLeft) {
+      setStatus("岸線大退中：淺岸陸續露出。還有 " + game.coastRecedeLeft + " 代。");
+    } else if (game.swampAgeLeft) {
+      setStatus("湖沼擴張中：低地變澤，走廊較容易被切開。還有 " + game.swampAgeLeft + " 代。");
     } else if (game.glacialLeft) {
       setStatus("中冰期：近岸與淺海結冰，回倉變少，倉會凍腐；沒有聚落的散點較易死。還有 " + game.glacialLeft + " 代。");
     } else if (game.climateKind === "hot") {
@@ -333,6 +450,7 @@
     } else if (game.energy <= 0) {
       setStatus("能量用盡。播放演化，採結晶才能再種。");
     }
+    if (!stampCells && hover.x >= 0 && hover.y >= 0 && hover.y < game.rows) applyInspect(hover.x, hover.y);
   }
 
   function resize() {
@@ -679,6 +797,80 @@
     }
   }
 
+  function drawAuraCircle(L, size, cx, cy, radius, fill, stroke) {
+    const r = radius * size;
+    const spots = [cx, cx - game.cols, cx + game.cols];
+    for (let s = 0; s < spots.length; s++) {
+      const px = L.ox + spots[s] * size;
+      const py = L.oy + cy * size;
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      if (fill) {
+        ctx.fillStyle = fill;
+        ctx.fill();
+      }
+      if (stroke) {
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+  }
+
+  function drawPlaceAuras(L, size) {
+    if (size < 4 && focusedOwner == null) return;
+    const radius = window.LifeCiv.ALPINE_R || 10;
+    const towns = game.settlements || [];
+    const showAll = size >= FIT_SIZE;
+    towns.forEach(function (s) {
+      if (focusedOwner != null && (s.owner || 0) !== focusedOwner) return;
+      if (focusedOwner == null && !showAll) return;
+      if (s.alpine) drawAuraCircle(L, size, s.cx, s.cy, radius, "rgba(176, 188, 208, 0.08)", "rgba(176, 188, 208, 0.16)");
+      if (s.ford) drawAuraCircle(L, size, s.cx, s.cy, radius, "rgba(70, 150, 150, 0.08)", "rgba(90, 190, 180, 0.18)");
+      if (s.groveWalk) drawAuraCircle(L, size, s.cx, s.cy, radius, "rgba(70, 140, 70, 0.08)", "rgba(90, 180, 90, 0.16)");
+    });
+  }
+
+  function townShortName(owner, seq, many) {
+    const f = game.factions && game.factions[owner];
+    const n = f && f.n != null ? f.n : owner + 1;
+    const full = window.LifeCiv.civName(n);
+    const short = n <= 1 ? "一" : full.replace(/^第/, "").replace(/文明$/, "");
+    return many ? short + seq : short;
+  }
+
+  function drawTownLabels(L, size) {
+    if (size < FIT_SIZE) return;
+    const byOwner = {};
+    (game.settlements || []).forEach(function (s) {
+      const o = s.owner || 0;
+      if (focusedOwner != null && o !== focusedOwner) return;
+      if (!byOwner[o]) byOwner[o] = [];
+      byOwner[o].push(s);
+    });
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.font = "600 " + Math.max(10, Math.round(size * 0.95)) + "px \"Microsoft JhengHei\", sans-serif";
+    Object.keys(byOwner).forEach(function (key) {
+      const list = byOwner[key];
+      list.sort(function (a, b) {
+        return (a.id || 0) - (b.id || 0);
+      });
+      list.forEach(function (s, n) {
+        const label = townShortName(Number(key), n + 1, list.length > 1);
+        const px = L.ox + s.cx * size;
+        const py = L.oy + s.cy * size - Math.max(2, size * 0.15);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(16, 14, 8, 0.72)";
+        ctx.strokeText(label, px, py);
+        ctx.fillStyle = "#fff6d8";
+        ctx.fillText(label, px, py);
+      });
+    });
+    ctx.restore();
+  }
+
   function draw() {
     const L = layout();
     ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
@@ -794,7 +986,7 @@
           ctx.fill();
         } else if (res === RESOURCE.CRYSTAL) {
           ctx.save();
-          ctx.fillStyle = "#7ee8ff";
+          ctx.fillStyle = game.ore && game.ore[i] ? "#c8894a" : "#7ee8ff";
           ctx.translate(px + size * 0.5, py + size * 0.5);
           ctx.rotate(Math.PI / 4);
           const s = Math.max(3, size * (0.22 + amt * 0.1));
@@ -943,6 +1135,9 @@
       ctx.stroke();
       ctx.lineWidth = 1;
     }
+
+    drawPlaceAuras(L, size);
+    drawTownLabels(L, size);
 
     if (stampCells && hover.x >= 0) {
       const ok = engine.canStamp(game, stampCells, hover.x, hover.y) && game.energy >= stampCells.length;
@@ -1100,7 +1295,10 @@
     const cell = cellAtEvent(ev);
     hover = cell || { x: -1, y: -1 };
     if (painting || erasing) paintAt(cell, erasing);
-    else draw();
+    else {
+      if (cell && !stampCells) applyInspect(cell.x, cell.y);
+      draw();
+    }
   });
 
   canvas.addEventListener("pointerup", function () {
@@ -1126,6 +1324,7 @@
       const who = Number(item.getAttribute("data-owner"));
       focusedOwner = focusedOwner === who ? null : who;
       renderFactions();
+      if (chronicleEl && !chronicleEl.classList.contains("hidden")) fillChronicle();
       draw();
     });
   }
@@ -1238,6 +1437,18 @@
     });
   }
   if (btnChronicleClose) btnChronicleClose.addEventListener("click", closeChronicle);
+  if (btnChronicleFollow) {
+    btnChronicleFollow.addEventListener("click", function () {
+      chronicleFollow = !chronicleFollow;
+      fillChronicle();
+    });
+  }
+  if (btnChronicleHeadlines) {
+    btnChronicleHeadlines.addEventListener("click", function () {
+      chronicleHeadlines = !chronicleHeadlines;
+      fillChronicle();
+    });
+  }
   if (chronicleEl) {
     chronicleEl.addEventListener("click", function (ev) {
       if (ev.target === chronicleEl) closeChronicle();

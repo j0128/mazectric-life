@@ -69,6 +69,7 @@
     game.current = packed.current ? new Uint8Array(packed.current) : null;
     const cells = game.cols * game.rows;
     game.resAmt = packed.resAmt ? new Uint8Array(packed.resAmt) : new Uint8Array(cells);
+    game.ore = packed.ore ? new Uint8Array(packed.ore) : new Uint8Array(cells);
     game.iceAge = false;
     game.boatCells = {};
     game.raftCells = {};
@@ -116,6 +117,7 @@
     const cells = size.cols * size.rows;
     game.current = packed.current ? new Uint8Array(packed.current) : null;
     game.resAmt = packed.resAmt ? new Uint8Array(packed.resAmt) : new Uint8Array(cells);
+    game.ore = packed.ore ? new Uint8Array(packed.ore) : new Uint8Array(cells);
     game.iceAge = false;
     game.boatCells = {};
     game.raftCells = {};
@@ -228,6 +230,7 @@
     const t = game.terrain[i];
     if (game.driedRiver && game.driedRiver[i]) return true;
     if (t === TERRAIN.ROCK && game.alpineMask && game.alpineMask[i]) return true;
+    if (t === TERRAIN.RIVER && game.fordMask && game.fordMask[i]) return true;
     return (
       t === TERRAIN.SOIL ||
       t === TERRAIN.FERTILE ||
@@ -251,8 +254,12 @@
     const y = (i - x) / game.cols;
     game.flashes.push({ x: x, y: y, age: 0, crystal: crystal });
     if (crystal) {
-      const foodGain = [0, 8, 12, 16][amt];
+      let foodGain = [0, 8, 12, 16][amt];
       const enGain = [0, 4, 5, 7][amt];
+      if (game.ore && game.ore[i] && global.LifeCiv.ownerHasCraft && global.LifeCiv.ownerHasCraft(game, who, "copper")) {
+        foodGain = Math.ceil(foodGain * 1.5);
+      }
+      if (game.ore) game.ore[i] = 0;
       game.energy += enGain;
       if (global.LifeCiv.addFood) global.LifeCiv.addFood(game, who, foodGain);
       else game.food += foodGain;
@@ -656,11 +663,12 @@
         const raft = game.raftCells && game.raftCells[i];
         const wet = t === TERRAIN.WATER || t === TERRAIN.RIVER;
         const alpineRock = t === TERRAIN.ROCK && game.alpineMask && game.alpineMask[i];
+        const fordRiver = t === TERRAIN.RIVER && game.fordMask && game.fordMask[i];
         if (t === TERRAIN.SNOW || (t === TERRAIN.ROCK && !alpineRock)) {
           next[i] = 0;
           continue;
         }
-        if (wet && !dike && !boat && !raft && !(game.driedRiver && game.driedRiver[i])) {
+        if (wet && !fordRiver && !dike && !boat && !raft && !(game.driedRiver && game.driedRiver[i])) {
           next[i] = 0;
           continue;
         }
@@ -669,7 +677,7 @@
         const town = game.civCells && game.civCells[i];
         const memory = town && town.legacy === "memory";
         const high = town && town.trait === "climb" && memory && W.isRockAdjacent(terrain, x, y, cols, rows);
-        const maxLive = alpineRock
+        const maxLive = alpineRock || fordRiver
           ? drought
             ? 2
             : 3
@@ -686,12 +694,12 @@
         const house = forCA.cache && forCA.cache[i];
         const scatter = (game.glacialLeft || 0) > 0 && !town && !house;
         const need = scatter ? 2 : 1;
-        const crowdCap = alpineRock
+        const crowdCap = alpineRock || fordRiver
           ? Math.min(scatter ? Math.min(crowd, 3) : crowd, drought ? 2 : 3)
           : scatter
             ? Math.min(crowd, 3)
             : crowd;
-        if (wet) {
+        if (wet && !fordRiver) {
           if (raft) {
             if (alive) next[i] = n >= need && n <= crowdCap ? 1 : 0;
             else next[i] = n === 3 ? 1 : 0;
@@ -701,7 +709,14 @@
           continue;
         }
         if (alive) next[i] = n >= need && n <= crowdCap ? 1 : 0;
-        else if (n === 3 || (n === 2 && (sprout[i] || t === TERRAIN.GROVE))) next[i] = 1;
+        else if (
+          n === 3 ||
+          (n === 2 &&
+            (sprout[i] ||
+              t === TERRAIN.GROVE ||
+              (game.groveMask && game.groveMask[i] && (t === TERRAIN.GROVE || t === TERRAIN.MARSH))))
+        )
+          next[i] = 1;
         else next[i] = 0;
       }
     }

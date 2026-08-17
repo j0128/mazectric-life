@@ -37,7 +37,7 @@ if (-not $exe) {
   exit 0
 }
 
-$profile = Join-Path $env:TEMP "posa-life-window-v41"
+$profile = Join-Path $env:TEMP "posa-life-window-v42"
 if (-not (Test-Path $profile)) {
   New-Item -ItemType Directory -Path $profile | Out-Null
 }
