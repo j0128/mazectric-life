@@ -11,16 +11,29 @@
     expand: { id: "expand", name: "拓殖" },
     sail: { id: "sail", name: "航海" },
     farm: { id: "farm", name: "農" },
+    herd: { id: "herd", name: "牧" },
+    fish: { id: "fish", name: "漁" },
   };
-  const TRAIT_IDS = ["deep", "dike", "climb", "resist", "expand", "sail", "farm"];
+  const TRAIT_IDS = ["deep", "dike", "climb", "resist", "expand", "sail", "farm", "herd", "fish"];
   const LEGACIES = {
     memory: { id: "memory", name: "記旱" },
     rite: { id: "rite", name: "歲祀" },
     hearth: { id: "hearth", name: "回爐" },
     ward: { id: "ward", name: "加護" },
     wall: { id: "wall", name: "城垣" },
+    law: { id: "law", name: "律" },
+    market: { id: "market", name: "市" },
   };
-  const LEGACY_IDS = ["memory", "rite", "hearth", "ward", "wall"];
+  const LEGACY_IDS = ["memory", "rite", "hearth", "ward", "wall", "law", "market"];
+  const CRAFTS = {
+    pot: { id: "pot", name: "陶" },
+    wheel: { id: "wheel", name: "輪" },
+    irrigate: { id: "irrigate", name: "灌" },
+    weave: { id: "weave", name: "織" },
+    salt: { id: "salt", name: "鹽" },
+    copper: { id: "copper", name: "銅" },
+  };
+  const CRAFT_IDS = ["pot", "wheel", "irrigate", "weave", "salt", "copper"];
   const HERO_TAGS = {
     humane: { id: "humane", name: "仁政" },
     birth: { id: "birth", name: "多產" },
@@ -50,6 +63,12 @@
     });
     return n >= SNAKE_CAP;
   }
+
+  function landSnakeBlocked(game, settl) {
+    if (!snakeSlotFull(game)) return false;
+    if (settl && hasCraft(settl, "wheel") && Math.random() < 0.55) return false;
+    return true;
+  }
   const HALL_WALL = 4;
   const SPARK_LIFE = 40;
   const WEAK_MAX = 7;
@@ -57,6 +76,8 @@
   const GRACE = 2;
   const ROLL_AGE = 30;
   const ROLL_RETRY = 20;
+  const CRAFT_AGE = 50;
+  const CRAFT_RETRY = 16;
   const EXPAND_CAP = 2;
   const NPC_MAX = 8;
   const LIVING_CAP = 6;
@@ -129,6 +150,7 @@
       epochVolcano: "pending",
       epochClimate: "pending",
       epochDrift: "pending",
+      volcanoMiss: 0,
       glacialLeft: 0,
       calderaCoolLeft: 0,
       caldera: {},
@@ -281,8 +303,24 @@
   }
 
   function hasFarm(game, settl) {
-    if (settl && settl.trait === "farm") return true;
-    return factionHasSkill(game, settl && settl.owner, "farm");
+    return !!(settl && settl.trait === "farm");
+  }
+
+  function hasHerd(game, settl) {
+    if (settl && settl.trait === "herd") return true;
+    return factionHasSkill(game, settl && settl.owner, "herd");
+  }
+
+  function hasFish(game, settl) {
+    return !!(settl && settl.trait === "fish");
+  }
+
+  function hasCraft(settl, id) {
+    return !!(settl && settl.craft === id);
+  }
+
+  function ownerHasCraft(game, who, id) {
+    return factionHasSkill(game, who, id);
   }
 
   function mergeFactionSkills(dst, src) {
@@ -464,11 +502,19 @@
     return null;
   }
 
+  function factionCraftId(f) {
+    for (let i = 0; i < CRAFT_IDS.length; i++) {
+      if (f.skills && f.skills[CRAFT_IDS[i]]) return CRAFT_IDS[i];
+    }
+    return null;
+  }
+
   function rememberSkills(game, settl) {
     if (!settl) return;
     const f = ensureFaction(game, settl.owner || 0);
     if (settl.trait && TRAITS[settl.trait]) f.skills[settl.trait] = 1;
     if (settl.legacy && LEGACIES[settl.legacy]) f.skills[settl.legacy] = 1;
+    if (settl.craft && CRAFTS[settl.craft]) f.skills[settl.craft] = 1;
   }
 
   function inheritFactionSkills(game, settl) {
@@ -481,6 +527,10 @@
     if (!settl.legacy) {
       const id = factionLegacyId(f);
       if (id) settl.legacy = id;
+    }
+    if (!settl.craft) {
+      const id = factionCraftId(f);
+      if (id) settl.craft = id;
     }
     rememberSkills(game, settl);
   }
@@ -610,6 +660,7 @@
     if (hasHeroTag(game, o, "suspect")) chance += 0.14;
     if (hasHeroTag(game, o, "cruel")) chance += 0.08;
     if (hasHeroTag(game, o, "humane")) chance *= 0.4;
+    if (factionHasSkill(game, o, "law")) chance *= 0.28;
     if (hasHeroTag(game, o, "fool") && Math.random() < 0.5) return 0;
     return chance;
   }
@@ -637,9 +688,15 @@
       if (towns >= 2 && !atCap && Math.random() < hungerBreakChance(game, o, f)) {
         if (tryCivilSplit(game, events, o)) return;
       }
-      if (towns >= 2 && atCap) {
+      if (towns >= 2 && atCap && !factionHasSkill(game, o, "law")) {
         killSmallestTown(game, o, events);
         f.hungryStreak = 0;
+        return;
+      }
+      if (towns >= 2 && atCap && factionHasSkill(game, o, "law")) {
+        scrapeOwner(game, o, 0.18);
+        f.hungryStreak = 0;
+        events.push(civName(f.n) + "連饑，律法壓下分號");
         return;
       }
       scatterFaction(game, o, events);
@@ -670,7 +727,9 @@
     const towns = (lf.towns || 0);
     const pop = lf.pop || 0;
     if (towns > 1 && pop > 22) return false;
-    if (Math.random() > 0.16) return false;
+    let p = 0.16;
+    if (ownerHasCraft(game, winner, "copper")) p = 0.3;
+    if (Math.random() > p) return false;
     return absorbFaction(game, loser, winner, events);
   }
 
@@ -694,8 +753,12 @@
       const hasTown = !!(info && info.n);
       if (hasTown) f.townless = 0;
       else f.townless = (f.townless || 0) + 1;
-      if (isHungry(game, o)) f.hungryStreak = (f.hungryStreak || 0) + 1;
-      else f.hungryStreak = 0;
+      if (isHungry(game, o)) {
+        f.hungryStreak = (f.hungryStreak || 0) + 1;
+        if (ownerHasCraft(game, o, "pot") && Math.random() < 0.32) {
+          f.hungryStreak = Math.max(0, f.hungryStreak - 1);
+        }
+      } else f.hungryStreak = 0;
     });
     tryGhostFade(game, events);
     Object.keys(game.factions).forEach(function (key) {
@@ -746,7 +809,7 @@
   }
 
   function isMajorEvent(text) {
-    return /學會|聚落形成|極端|地震|佔領遺址|因糧|過河|分家|出走|而遷|爐芯|王國|帝國|滅亡|全部消失|遠方出現|繼承了火種|之主|內戰|衝突|海底|火山|河口淤|開出田|土坡|山洪|決口|舊鎮荒了|離開了舊址|舊址生出|上香|還記得|歲祀的人說|舊爐還有人記得|多雨年|旱年|蟲疾|填了一段河|低地走成|積水成川|積了水|河枯成一線|乾河又來了水|海面漲了|潮退露出灘|季風轉向|林往前長|沙埋了地|填了一小塊海|海上有人住下來|船團散了|開出一條山口|船團|航海|大疫|倉中生霉|強震|颱風|疫過了邊境|中冰期|冷卻|酷熱|嚴寒|山脈|火山爆發|海嘯打上|年候將亂|地要裂|併入|散族|分鎮散了|諸部離散|開出田糧/.test(
+    return /學會|工藝|聚落形成|極端|地震|佔領遺址|因糧|過河|分家|出走|而遷|爐芯|王國|帝國|滅亡|全部消失|遠方出現|繼承了火種|之主|內戰|衝突|海底|火山|河口淤|開出田|土坡|山洪|決口|舊鎮荒了|離開了舊址|舊址生出|上香|還記得|歲祀的人說|舊爐還有人記得|多雨年|旱年|蟲疾|填了一段河|低地走成|積水成川|積了水|河枯成一線|乾河又來了水|海面漲了|潮退露出灘|季風轉向|林往前長|沙埋了地|填了一小塊海|海上有人住下來|船團散了|開出一條山口|船團|航海|大疫|倉中生霉|強震|颱風|疫過了邊境|中冰期|冷卻|酷熱|嚴寒|山脈|火山爆發|海嘯打上|年候將亂|地要裂|併入|散族|分鎮散了|諸部離散|開出田糧|山沒裂/.test(
       text || ""
     );
   }
@@ -787,7 +850,7 @@
       const f = game.factions[key];
       const skills = [];
       Object.keys(f.skills || {}).forEach(function (id) {
-        const spec = TRAITS[id] || LEGACIES[id];
+        const spec = TRAITS[id] || LEGACIES[id] || CRAFTS[id];
         if (spec) skills.push(spec.name);
       });
       let rank = "遺跡";
@@ -953,6 +1016,9 @@
       halls: 0,
       boats: 0,
       lush: 0,
+      dryland: 0,
+      rot: 0,
+      towns: 0,
     };
   }
 
@@ -1019,6 +1085,7 @@
     let water = 0;
     let rock = 0;
     let lush = 0;
+    let dryland = 0;
     let npc = false;
     for (let k = 0; k < list.length; k++) {
       const i = list[k];
@@ -1029,6 +1096,7 @@
       if (W.isRockAdjacent(game.terrain, x, y, game.cols, game.rows)) rock++;
       const tt = game.terrain[i];
       if (tt === TERRAIN.FERTILE || tt === TERRAIN.GROVE || tt === TERRAIN.MARSH) lush++;
+      if (tt === TERRAIN.SAND || tt === TERRAIN.HIGHLAND) dryland++;
       if (!npc && cellSeesNpc(game, x, y, who)) npc = true;
     }
     if (sid === "flood") bump(mem, "flood");
@@ -1044,6 +1112,11 @@
     if (npc) bump(mem, "sawNpc");
     if (settl.size >= 22) bump(mem, "crowded");
     if (lush) bump(mem, "lush", lush > 4 ? 2 : 1);
+    if (dryland) bump(mem, "dryland", dryland > 3 ? 2 : 1);
+    if (sid === "winter") bump(mem, "cold");
+    const fac = game.factions && game.factions[who];
+    if (fac && (fac.rotHungry || 0) > 0) bump(mem, "rot");
+    if ((game.settlements || []).filter(function (s) { return (s.owner || 0) === who; }).length >= 2) bump(mem, "towns");
     if (localResourceScore(game, settl.cx, settl.cy) < 3) bump(mem, "scarce");
     const halls = hallCount(game, list);
     if (halls > mem.halls) mem.halls = halls;
@@ -1093,6 +1166,13 @@
         tier((settl.memory || {}).hungry, 4, 5) +
         tier((settl.memory || {}).drought, 8, 4) +
         tier((settl.memory || {}).lush, 4, 7),
+      1 +
+        tier((settl.memory || {}).crowded, 4, 4) +
+        tier((settl.memory || {}).dryland, 4, 6) +
+        tier((settl.memory || {}).scarce, 4, 5),
+      1 +
+        tier((settl.memory || {}).nearWater, 6, 7) +
+        tier((settl.memory || {}).flood, 6, 5),
     ]);
   }
 
@@ -1105,6 +1185,26 @@
       1 + tier(m.ruins, 1, 5) + tier(m.quake, 1, 4),
       1 + tier(m.disaster, 1, 5) + tier(m.quake, 1, 3),
       1 + tier(m.disaster, 1, 4) + tier(m.sawNpc, 6, 4) + tier(m.halls, 2, 4),
+      1 + tier(m.towns, 4, 6) + tier(m.disaster, 1, 3) + (gameKingdomHint(settl) ? 4 : 0),
+      1 + tier(m.sawNpc, 6, 6) + tier(m.crowded, 4, 3) + tier(m.scarce, 6, 3),
+    ]);
+  }
+
+  function gameKingdomHint(settl) {
+    return (settl && (settl.size || 0) >= 24) || ((settl.memory || {}).towns || 0) > 8;
+  }
+
+  function pickCraftWeighted(settl) {
+    const m = (settl && settl.memory) || emptyMemory();
+    const farmish = settl && (settl.trait === "farm" || settl.trait === "deep") ? 4 : 0;
+    const herdish = settl && settl.trait === "herd" ? 5 : 0;
+    return pickWeighted(CRAFT_IDS, [
+      1 + tier(m.hungry, 4, 5) + tier(m.rot, 1, 6) + farmish + tier(m.lush, 4, 3),
+      1 + tier(m.towns, 4, 5) + tier(m.scarce, 4, 4) + ((m.nearWater || 0) < 8 ? 3 : 0),
+      1 + farmish + tier(m.drought, 6, 6) + tier(m.lush, 4, 4) + tier(m.nearWater, 8, 3),
+      1 + herdish + tier(m.cold, 6, 5) + tier(m.lush, 4, 3),
+      1 + tier(m.nearWater, 8, 5) + tier(m.dryland, 4, 5) + tier(m.drought, 8, 4) + tier(m.hungry, 4, 3),
+      1 + tier(m.nearRock, 6, 7) + tier(m.towns, 4, 4) + tier(m.disaster, 1, 3) + (gameKingdomHint(settl) ? 5 : 0),
     ]);
   }
 
@@ -1188,6 +1288,10 @@
     return pickLegacyWeighted(settl || { memory: emptyMemory() });
   }
 
+  function pickCraft(settl) {
+    return pickCraftWeighted(settl || { memory: emptyMemory() });
+  }
+
   function potencyOf(s) {
     if (!s) return 0;
     return Math.min(2, Math.floor((s.age || 0) / 80) + Math.floor((s.rebirths || 0) / 3));
@@ -1205,8 +1309,28 @@
     events.push("一座聚落學會了遺芳「" + LEGACIES[settl.legacy].name + "」");
   }
 
+  function tryCraft(game, settl, events) {
+    inheritFactionSkills(game, settl);
+    if (settl.craft) {
+      rememberSkills(game, settl);
+      return;
+    }
+    if (!settl.trait) return;
+    if ((settl.age || 0) < CRAFT_AGE && potencyOf(settl) < 1) return;
+    if (settl.craftIn != null && (settl.age || 0) < settl.craftIn) return;
+    if (Math.random() < 0.62) {
+      settl.craft = pickCraft(settl);
+      rememberSkills(game, settl);
+      events.push("一座聚落學會了工藝「" + CRAFTS[settl.craft].name + "」");
+    } else {
+      settl.craftIn = (settl.age || 0) + CRAFT_RETRY;
+    }
+  }
+
   function withLineage(settl, src) {
     src = src || {};
+    settl.craft = src.craft || null;
+    settl.craftIn = src.craftIn;
     settl.rebirths = src.rebirths || 0;
     settl.legacy = src.legacy || null;
     settl.lineageId = src.lineageId || src.id || settl.id;
@@ -1283,6 +1407,7 @@
         cy: g.cy,
         age: old.age + 1,
         trait: old.trait,
+        craft: old.craft,
         nextRoll: old.nextRoll || ROLL_AGE,
         miss: 0,
         npc: !!(old.npc || g.npc),
@@ -1293,6 +1418,7 @@
       inheritFactionSkills(game, settl);
       tallyExperience(game, settl);
       tryRoll(game, settl, events);
+      tryCraft(game, settl, events);
       tryLegacy(game, settl, events);
       if (settl.legacy === "rite" && settl.age % 16 === 0) {
         const who = settl.owner || 0;
@@ -1302,6 +1428,7 @@
         events.push("歲祀：+" + gift + " 糧");
       }
       if (settl.age && settl.age % (hasFarm(game, settl) ? 4 : 8) === 0) harvestTown(game, settl);
+      if (settl.age && settl.age % 6 === 0) craftTownYield(game, settl);
       next.push(settl);
     });
 
@@ -1334,6 +1461,7 @@
           cy: g.cy,
           age: ghost.age + 1,
           trait: ghost.trait,
+          craft: ghost.craft,
           nextRoll: ghost.nextRoll || ROLL_AGE,
           miss: 0,
           npc: !!(ghost.npc || g.npc),
@@ -1344,7 +1472,10 @@
         inheritFactionSkills(game, settl);
         tallyExperience(game, settl);
         tryRoll(game, settl, events);
+        tryCraft(game, settl, events);
         tryLegacy(game, settl, events);
+        if (settl.age && settl.age % (hasFarm(game, settl) ? 4 : 8) === 0) harvestTown(game, settl);
+        if (settl.age && settl.age % 6 === 0) craftTownYield(game, settl);
         next.push(settl);
         if (ghost.age < 2 && !settl.npc) events.push("一座聚落形成");
       } else {
@@ -1850,18 +1981,60 @@
   function harvestTown(game, settl) {
     if (!settl || !settl.list) return 0;
     let lush = 0;
+    let wet = 0;
+    let sand = 0;
+    let shore = 0;
     (settl.list || []).forEach(function (i) {
       if (!game.life[i]) return;
       const t = game.terrain[i];
+      const x = i % game.cols;
+      const y = (i - x) / game.cols;
       if (t === TERRAIN.FERTILE || t === TERRAIN.GROVE || t === TERRAIN.MARSH) lush += 1;
+      if (t === TERRAIN.SAND) sand += 1;
+      if (cellTouchesWet(game, x, y)) {
+        wet += 1;
+        shore += 1;
+      }
     });
     const farm = hasFarm(game, settl);
-    if (!lush && !farm) return 0;
+    const fish = hasFish(game, settl);
+    const irrigate = hasCraft(settl, "irrigate");
+    const salt = hasCraft(settl, "salt");
+    const sid = seasonIdOf(game);
+    const glacial = !!(game.glacialLeft > 0);
+    if (!lush && !farm && !fish && !salt) return 0;
     let gift = lush ? 1 + Math.min(2, Math.floor(lush / 8)) : 0;
     if (settl.legacy === "rite") gift += 1;
     if (farm) gift = Math.max(2, gift * 2 + 1);
+    if (irrigate) gift = Math.max(gift + 2, Math.floor(gift * 1.6));
+    if (sid === "drought" && !irrigate) gift = Math.floor(gift * 0.45);
+    if (fish) {
+      let catchN = 1 + Math.min(3, Math.floor(wet / 6));
+      if (sid === "flood") catchN += 1;
+      gift += catchN;
+    }
+    if (salt) gift += 1 + Math.min(2, Math.floor((sand + shore) / 8));
+    if (glacial) gift = Math.max(0, Math.floor(gift * 0.45));
     if (gift) addFood(game, settl.owner || 0, gift);
-    if (farm && Math.random() < 0.55) sowTownCrystal(game, settl);
+    if ((farm || settl.legacy === "market") && Math.random() < (settl.legacy === "market" ? 0.7 : 0.55)) {
+      sowTownCrystal(game, settl);
+    }
+    return gift;
+  }
+
+  function craftTownYield(game, settl) {
+    if (!settl) return 0;
+    let gift = 0;
+    if (hasCraft(settl, "weave")) {
+      gift += 1 + Math.min(3, Math.floor((settl.size || 0) / 14));
+      let grove = 0;
+      (settl.list || []).forEach(function (i) {
+        if (game.life[i] && (game.terrain[i] === TERRAIN.GROVE || game.terrain[i] === TERRAIN.MARSH)) grove += 1;
+      });
+      if (grove) gift += 1;
+    }
+    if (game.glacialLeft) gift = Math.floor(gift * 0.45);
+    if (gift) addFood(game, settl.owner || 0, gift);
     return gift;
   }
 
@@ -1906,7 +2079,11 @@
       }
     } else {
       w = terra * 0.3;
+      if (factionHasSkill(game, ownerOf(game, i), "herd")) w *= 0.7;
     }
+    if (s && s.trait === "herd") w *= 0.92;
+    const tt = game.terrain[i];
+    if (s && s.trait === "herd" && (tt === TERRAIN.SAND || tt === TERRAIN.HIGHLAND)) w *= 0.82;
     if (isSpark(game, i)) w *= 0.55;
     w *= densityScale(game, s ? s.owner : ownerOf(game, i));
     return w;
@@ -1915,11 +2092,14 @@
   function starveRank(game, i, n) {
     if (isSpark(game, i)) return 1000 + n;
     const s = game.civCells && game.civCells[i];
-    if (s) {
-      const home = homeTown(game, s.owner || 0);
-      if (home && s.id !== home.id && s.size < 16) return 800 + n;
-      if (s.size >= 20) return -n;
-    }
+    if (!s) return n;
+    if (s.trait === "herd" && (game.terrain[i] === TERRAIN.SAND || game.terrain[i] === TERRAIN.HIGHLAND)) return 700 + n;
+    const x = i % game.cols;
+    const y = (i - x) / game.cols;
+    if (hasCraft(s, "salt") && (game.terrain[i] === TERRAIN.SAND || cellTouchesWet(game, x, y))) return 720 + n;
+    const home = homeTown(game, s.owner || 0);
+    if (home && s.id !== home.id && s.size < 16) return 800 + n;
+    if (s.size >= 20) return -n;
     return n;
   }
 
@@ -2248,12 +2428,14 @@
         fromId: settl.id,
         lineageId: settl.lineageId || settl.id,
         trait: settl.trait,
+        craft: settl.craft,
         legacy: settl.legacy,
         potency: potencyOf(settl),
         target: target,
         kind: kind || "culture",
         age: 0,
-        maxAge: lifeMax,
+        maxAge: lifeMax + (hasCraft(settl, "wheel") && kind !== "boat" && kind !== "fleet" ? 16 : 0),
+        wheel: !!(hasCraft(settl, "wheel") && kind !== "boat" && kind !== "fleet"),
       });
       return true;
     }
@@ -2358,6 +2540,7 @@
   function deliverCulture(game, caravan, dest, events) {
     if (!dest) return;
     if (caravan.trait && !dest.trait) dest.trait = caravan.trait;
+    if (caravan.craft && !dest.craft) dest.craft = caravan.craft;
     if (caravan.legacy && !dest.legacy) dest.legacy = caravan.legacy;
     dest.inspiredBy = dest.inspiredBy || {};
     if (caravan.lineageId && !dest.inspiredBy[caravan.lineageId] && caravan.potency >= potencyOf(dest)) {
@@ -2392,7 +2575,9 @@
     if (!hit) return false;
     const victim = dest.owner || 0;
     const thief = caravan.owner || 0;
-    const steal = Math.min(foodOf(game, victim), 4 + Math.floor(Math.random() * 5));
+    let steal = Math.min(foodOf(game, victim), 4 + Math.floor(Math.random() * 5));
+    if (ownerHasCraft(game, victim, "salt")) steal = Math.min(foodOf(game, victim), steal + 3);
+    if (ownerHasCraft(game, thief, "copper")) steal = Math.min(foodOf(game, victim), steal + 2);
     spendFood(game, victim, steal);
     addFood(game, thief, steal);
     const walled = dest.legacy === "wall" && dest.walled;
@@ -2403,7 +2588,9 @@
       const edges = dest.list.filter(function (i) {
         return game.life[i] && !block[i];
       });
-      shuffledLocal(edges).slice(0, 1 + Math.floor(Math.random() * 2)).forEach(function (i) {
+      let scrape = 1 + Math.floor(Math.random() * 2);
+      if (ownerHasCraft(game, thief, "copper")) scrape += 1;
+      shuffledLocal(edges).slice(0, scrape).forEach(function (i) {
         game.life[i] = 0;
         if (game.owner) game.owner[i] = 0;
       });
@@ -2736,6 +2923,7 @@
     if (hasHeroTag(game, who, "settle")) wait = Math.max(12, wait - 8);
     if (hasHeroTag(game, who, "vanity")) wait = Math.max(10, wait - 6);
     if (hasHeroTag(game, who, "idle")) wait += 14;
+    if (hasCraft(settl, "wheel")) wait = Math.max(12, wait - 10);
     return wait;
   }
 
@@ -2746,6 +2934,8 @@
     if (settl.trait === "deep") return "倉滿，分出一支部族";
     if (settl.trait === "sail") return "航海的人渡海分家";
     if (settl.trait === "farm") return "農人開田分家";
+    if (settl.trait === "herd") return "牧人趕畜分家";
+    if (settl.trait === "fish") return "漁人沿岸分家";
     return "為尋資源而遷";
   }
 
@@ -2760,7 +2950,7 @@
       s.seedIn = seedWait(s, game);
       if (packed > 0.32 && !hasHeroTag(game, s.owner, "vanity") && Math.random() < packed) return;
       if (s.trait === "resist" && !(s.memory && s.memory.disaster) && Math.random() < 0.5) return;
-      if (snakeSlotFull(game)) return;
+      if (landSnakeBlocked(game, s)) return;
       if (snakeBusy(game, s)) return;
       const target = pickSeedTarget(game, s, isPlantable);
       if (target && spawnSnake(game, s, target, isPlantable, "migrate")) {
@@ -2800,7 +2990,7 @@
     (game.settlements || []).forEach(function (s) {
       if (!s.trait) return;
       if (!townTouchesRiverOrIce(game, s)) return;
-      if (snakeSlotFull(game)) return;
+      if (landSnakeBlocked(game, s)) return;
       if (snakeBusy(game, s)) return;
       const chance = s.trait === "expand" ? 0.72 : s.trait === "dike" ? 0.55 : s.trait === "farm" ? 0.5 : 0.48;
       let roll = chance;
@@ -2811,7 +3001,7 @@
       if (!target) return;
       if (spawnSnake(game, s, target, isPlantable, "migrate")) {
         const last = game.caravans[game.caravans.length - 1];
-        if (last) last.maxAge = 30;
+        if (last) last.maxAge = last.wheel ? 46 : 30;
         events.push("沿冰過河");
       }
     });
@@ -2838,7 +3028,7 @@
   function tickPressure(game, isPlantable, events) {
     (game.settlements || []).forEach(function (s) {
       if (!wantRaid(game, s)) return;
-      if (snakeSlotFull(game)) return;
+      if (landSnakeBlocked(game, s)) return;
       if (snakeBusy(game, s)) return;
       const foe = pickRaidTarget(game, s);
       if (foe) {
@@ -2888,6 +3078,7 @@
     for (let k = 0; k < take; k++) {
       const h = hits[Math.floor(Math.random() * hits.length)];
       let chance = 0.12;
+      if (ownerHasCraft(game, h.a, "copper") || ownerHasCraft(game, h.b, "copper")) chance += 0.1;
       if (hasHeroTag(game, h.a, "warlord") || hasHeroTag(game, h.a, "endless")) chance += 0.1;
       if (hasHeroTag(game, h.b, "warlord") || hasHeroTag(game, h.b, "endless")) chance += 0.06;
       if (hasHeroTag(game, h.a, "cruel") || hasHeroTag(game, h.b, "cruel")) chance += 0.06;
@@ -2903,6 +3094,16 @@
         game.owner[loser] = 0;
       } else {
         game.owner[loser] = attacker;
+      }
+      if (ownerHasCraft(game, attacker, "copper")) {
+        const lx = loser % game.cols;
+        const ly = (loser - lx) / game.cols;
+        const extra = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(Math.random() * 4)];
+        const ni = idx(game, lx + extra[0], ly + extra[1]);
+        if (game.life[ni] && ownerOf(game, ni) === loserOwner) {
+          game.life[ni] = 0;
+          game.owner[ni] = 0;
+        }
       }
       fights += 1;
       if (tryBorderAbsorb(game, loserOwner, attacker, events)) break;
@@ -3282,7 +3483,7 @@
       s.riteVisitIn -= 1;
       if (s.riteVisitIn > 0) return;
       s.riteVisitIn = 40 + Math.floor(Math.random() * 18);
-      if (snakeSlotFull(game)) return;
+      if (landSnakeBlocked(game, s)) return;
       if (snakeBusy(game, s)) return;
       let best = null;
       let bestD = 80;
@@ -3397,7 +3598,8 @@
       s.caravanIn -= 1;
       if (s.caravanIn > 0) return;
       s.caravanIn = 24 + Math.floor(Math.random() * 10);
-      if (snakeSlotFull(game)) return;
+      if (hasCraft(s, "wheel") || s.legacy === "market") s.caravanIn = Math.max(10, s.caravanIn - 8);
+      if (landSnakeBlocked(game, s)) return;
       if (snakeBusy(game, s)) return;
       if (spawnCaravan(game, s, isPlantable)) events.push("一支商隊出發");
     });
@@ -3442,6 +3644,16 @@
         if (c.kind === "fleet") events.push("船團沒靠岸");
         dismissCaravan(game, c);
         return;
+      }
+      if (c.wheel && c.kind !== "fleet" && caravanAlive(game, c)) {
+        if (caravanArrived(game, c, events, isPlantable)) {
+          if (c.kind !== "migrate" && c.kind !== "boat") dismissCaravan(game, c);
+          return;
+        }
+        if (!stepCaravan(game, c, isPlantable)) {
+          dismissCaravan(game, c);
+          return;
+        }
       }
       keep.push(c);
     });
@@ -3616,6 +3828,19 @@
     return weights[weights.length - 1].o;
   }
 
+  function tickGlacialFood(game) {
+    if (!(game.glacialLeft > 0)) return;
+    Object.keys(game.factions || {}).forEach(function (key) {
+      const who = Number(key);
+      const f = game.factions[who];
+      if (!f || !f.alive) return;
+      const have = foodOf(game, who);
+      if (have <= 0) return;
+      const frac = ownerHasCraft(game, who, "pot") ? 0.012 : 0.03;
+      spendFood(game, who, Math.max(1, Math.ceil(have * frac)));
+    });
+  }
+
   function applyPlague(game, who, events, inherited) {
     const f = ensureFaction(game, who);
     let dur = inherited || 16 + Math.floor(Math.random() * 13);
@@ -3635,6 +3860,7 @@
     const have = foodOf(game, who);
     let take = 0.55 + Math.random() * 0.2;
     if (f.skills && f.skills.deep) take *= 0.65;
+    if (ownerHasCraft(game, who, "pot")) take *= 0.5;
     const lost = spendFood(game, who, Math.ceil(have * take));
     f.rotHungry = 8;
     events.push(civName(f.n) + "倉中生霉" + (lost ? "（-" + lost + "糧）" : ""));
@@ -3913,6 +4139,7 @@
 
   global.LifeCiv = {
     TRAITS: TRAITS,
+    CRAFTS: CRAFTS,
     LEGACIES: LEGACIES,
     HERO_TAGS: HERO_TAGS,
     emptyCivState: emptyCivState,
@@ -3952,6 +4179,7 @@
     potencyOf: potencyOf,
     npcWait: npcWait,
     tickBorderWar: tickBorderWar,
+    tickGlacialFood: tickGlacialFood,
     hasHeroTag: hasHeroTag,
     isEmpireOwner: isEmpireOwner,
     densityScale: densityScale,

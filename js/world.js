@@ -2450,7 +2450,8 @@
     }
     const cols = game.cols;
     const rows = game.rows;
-    const max = Math.round(((SEASONS[game.season] || {}).maxRes || 80) * (cols * rows) / (200 * 120));
+    let max = Math.round(((SEASONS[game.season] || {}).maxRes || 80) * (cols * rows) / (200 * 120));
+    if (game.glacialLeft) max = Math.round(max * 0.35);
     for (let i = 0; i < game.resources.length; i++) {
       if (!game.resources[i]) continue;
       const x = i % cols;
@@ -2459,6 +2460,11 @@
       const stain = game.stain && game.stain[i] >= 4;
       if (seasonId === "flood" && (game.terrain[i] === TERRAIN.WATER || game.terrain[i] === TERRAIN.RIVER)) {
         wipeRes(game, i);
+        continue;
+      }
+      if (game.glacialLeft && game.resources[i] === RESOURCE.CRYSTAL && Math.random() < 0.08) {
+        if (game.resAmt[i] > 1) game.resAmt[i] -= 1;
+        else wipeRes(game, i);
         continue;
       }
       if (seasonId === "drought") {
@@ -2476,7 +2482,7 @@
     if (seasonId === "winter" || seasonId === "drought" || seasonId === "flood") return;
     let current = countResources(game.resources);
     const areaMul = (cols * rows) / (200 * 120);
-    const tries = Math.round((seasonId === "rain" ? 28 : 14) * areaMul);
+    const tries = Math.round((seasonId === "rain" ? 28 : 14) * areaMul * (game.glacialLeft ? 0.4 : 1));
     for (let k = 0; k < tries && current < max; k++) {
       const x = randInt(cols);
       const y = randInt(rows);
@@ -2494,6 +2500,10 @@
       else if (t === TERRAIN.HIGHLAND) {
         p = 0.16;
         crystal = 0.55;
+      }
+      if (game.glacialLeft) {
+        p *= 0.45;
+        crystal *= 0.4;
       }
       if (Math.random() > p) continue;
       game.resources[i] = Math.random() < crystal ? RESOURCE.CRYSTAL : RESOURCE.NUTRIENT;
@@ -2565,16 +2575,28 @@
     game.stormTint = Math.max(game.stormTint || 0, 14);
   }
 
+  function nextVolcanoAt(game) {
+    return (game.generation || 0) + 1800 + Math.floor(Math.random() * 401);
+  }
+
+  function volcanoChance(game) {
+    return Math.min(0.9, 0.42 + (game.volcanoMiss || 0) * 0.16);
+  }
+
   function fireMegaVolcano(game, events) {
     const at = pickEpochLand(game);
     if (at < 0) return;
+    const level = game.volcanoMiss || 0;
+    const mul = 1 + 0.2 * level;
     const cols = game.cols;
     const ox = at % cols;
     const oy = (at - ox) / cols;
     const scale = Math.sqrt((cols * game.rows) / (200 * 120));
-    const r = Math.round((18 + Math.floor(Math.random() * 11)) * Math.max(0.9, Math.min(1.4, scale)));
+    const r = Math.round((18 + Math.floor(Math.random() * 11)) * Math.max(0.9, Math.min(1.4, scale)) * mul);
     const r2 = r * r;
     const sea = game.seaLevel == null ? 100 : game.seaLevel;
+    const midKill = Math.min(0.92, 0.62 + level * 0.08);
+    const farKill = Math.min(0.88, 0.48 + level * 0.08);
     if (!game.caldera) game.caldera = {};
     for (let i = 0; i < game.baseTerrain.length; i++) {
       const x = i % cols;
@@ -2603,11 +2625,11 @@
           forceTerrain(game, i, TERRAIN.SAND, 0);
           game.caldera[i] = 3;
         }
-        if (game.life && game.life[i] && Math.random() < 0.62) {
+        if (game.life && game.life[i] && Math.random() < midKill) {
           game.life[i] = 0;
           if (game.owner) game.owner[i] = 0;
         }
-      } else if (game.life && game.life[i] && Math.random() < 0.48) {
+      } else if (game.life && game.life[i] && Math.random() < farKill) {
         game.life[i] = 0;
         if (game.owner) game.owner[i] = 0;
       }
@@ -2616,11 +2638,15 @@
     game.quakeRing = { x: ox, y: oy, r: r, tint: 14 };
     game.extremeTint = Math.max(game.extremeTint || 0, 14);
     coastTsunami(game);
-    game.glacialLeft = 100 + Math.floor(Math.random() * 41);
+    if (level >= 2) coastTsunami(game);
+    game.glacialLeft = 100 + level * 40 + Math.floor(Math.random() * 41);
     game.iceAge = true;
     freezeRivers(game, true);
     game.calderaCoolLeft = 0;
-    events.push("某地火山爆發，山抬起來了");
+    game.volcanoMiss = 0;
+    game.epochVolcano = "pending";
+    game.epochVolcanoAt = nextVolcanoAt(game);
+    events.push(level ? "某地火山爆發，這回山抬得更高" : "某地火山爆發，山抬起來了");
     events.push("海嘯打上諸岸");
     events.push("中冰期開始");
   }
@@ -2706,6 +2732,12 @@
       if (Math.random() < chance) {
         game[key] = "coming";
         game.epochOmen = coming;
+      } else if (key === "epochVolcano") {
+        game.volcanoMiss = (game.volcanoMiss || 0) + 1;
+        game.epochVolcano = "pending";
+        game.epochVolcanoAt = nextVolcanoAt(game);
+        if (game.epochOmen === coming) game.epochOmen = null;
+        events.push("這回山沒裂，下回會更兇");
       } else {
         game[key] = "skipped";
         if (game.epochOmen === coming) game.epochOmen = null;
@@ -2729,7 +2761,12 @@
     if (game.epochVolcanoAt == null) game.epochVolcanoAt = 1820 + Math.floor(Math.random() * 361);
     if (game.epochClimateAt == null) game.epochClimateAt = 5750 + Math.floor(Math.random() * 501);
     if (game.epochDriftAt == null) game.epochDriftAt = 7800 + Math.floor(Math.random() * 401);
-    resolveEpochSlot(game, "epochVolcano", game.epochVolcanoAt, 0.42, "volcano", events);
+    if (game.epochVolcano === "skipped") {
+      game.volcanoMiss = Math.max(game.volcanoMiss || 0, 1);
+      game.epochVolcano = "pending";
+      game.epochVolcanoAt = nextVolcanoAt(game);
+    }
+    resolveEpochSlot(game, "epochVolcano", game.epochVolcanoAt, volcanoChance(game), "volcano", events);
     resolveEpochSlot(game, "epochClimate", game.epochClimateAt, 0.4, "climate", events);
     resolveEpochSlot(game, "epochDrift", game.epochDriftAt, 0.5, "drift", events);
     if ((game.glacialLeft || 0) > 0) {

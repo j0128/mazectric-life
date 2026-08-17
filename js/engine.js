@@ -676,16 +676,20 @@
           !!(forCA.hardy[i] || town || memory)
         );
         const crowd = memory && alive ? Math.max(maxLive, drought ? (high ? 5 : 4) : 5) : maxLive;
+        const house = forCA.cache && forCA.cache[i];
+        const scatter = (game.glacialLeft || 0) > 0 && !town && !house;
+        const need = scatter ? 2 : 1;
+        const crowdCap = scatter ? Math.min(crowd, 3) : crowd;
         if (wet) {
           if (raft) {
-            if (alive) next[i] = n >= 1 && n <= crowd ? 1 : 0;
+            if (alive) next[i] = n >= need && n <= crowdCap ? 1 : 0;
             else next[i] = n === 3 ? 1 : 0;
           } else {
-            next[i] = alive && n >= 1 && n <= crowd ? 1 : 0;
+            next[i] = alive && n >= need && n <= crowdCap ? 1 : 0;
           }
           continue;
         }
-        if (alive) next[i] = n >= 1 && n <= crowd ? 1 : 0;
+        if (alive) next[i] = n >= need && n <= crowdCap ? 1 : 0;
         else if (n === 3 || (n === 2 && (sprout[i] || t === TERRAIN.GROVE))) next[i] = 1;
         else next[i] = 0;
       }
@@ -717,6 +721,7 @@
     }
     const after = gatherSkills(game);
     const starved = starve(game, after.cache);
+    if (Civ.tickGlacialFood) Civ.tickGlacialFood(game);
     let groups = Civ.findGroups(game, after.shelter);
     let hearthNote = "";
     if (Civ.tryHearthSpark(game, groups, isPlantable)) {

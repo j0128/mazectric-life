@@ -294,7 +294,7 @@
     } else if (game.epochOmen === "drift") {
       setStatus("災兆：山脈不安，脊線將開始挪動。");
     } else if (game.glacialLeft) {
-      setStatus("中冰期：近岸與淺海結冰，饑餓加重。還有 " + game.glacialLeft + " 代。");
+      setStatus("中冰期：近岸與淺海結冰，回倉變少，倉會凍腐；沒有聚落的散點較易死。還有 " + game.glacialLeft + " 代。");
     } else if (game.climateKind === "hot") {
       setStatus("全球酷熱乾旱。沙漠擴張，海面偏低。");
     } else if (game.climateKind === "cold") {
