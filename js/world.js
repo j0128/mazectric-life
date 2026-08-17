@@ -41,11 +41,11 @@
 
   const SEASON_LENGTH = 32;
   const SEASONS = [
-    { id: "warm", name: "溫暖", maxRes: 104, spawnMin: 3, spawnMax: 9, every: 6 },
-    { id: "rain", name: "雨季", maxRes: 147, spawnMin: 5, spawnMax: 14, every: 3 },
-    { id: "flood", name: "洪水", maxRes: 104, spawnMin: 3, spawnMax: 9, every: 6 },
-    { id: "winter", name: "冬季", maxRes: 55, spawnMin: 1, spawnMax: 4, every: 8 },
-    { id: "drought", name: "乾旱", maxRes: 25, spawnMin: 0, spawnMax: 2, every: 12 },
+    { id: "warm", name: "溫暖", maxRes: 138, spawnMin: 4, spawnMax: 12, every: 6 },
+    { id: "rain", name: "雨季", maxRes: 196, spawnMin: 7, spawnMax: 18, every: 3 },
+    { id: "flood", name: "洪水", maxRes: 128, spawnMin: 3, spawnMax: 10, every: 6 },
+    { id: "winter", name: "冬季", maxRes: 64, spawnMin: 1, spawnMax: 5, every: 8 },
+    { id: "drought", name: "乾旱", maxRes: 32, spawnMin: 0, spawnMax: 3, every: 12 },
   ];
 
   function randInt(n) {
@@ -821,7 +821,7 @@
     const area = land + 1;
     const areaMul = (cols * rows) / (200 * 120);
     const nuts = Math.min(Math.round(160 * areaMul), 32 + Math.floor(area / 80));
-    const crystals = Math.min(Math.round(32 * areaMul), 7 + Math.floor(area / 360));
+    const crystals = Math.min(Math.round(56 * areaMul), 14 + Math.floor(area / 220));
     const resAmt = new Uint8Array(cols * rows);
     for (let i = 0; i < nuts; i++) {
       placeResource(terrain, resources, null, cols, rows, RESOURCE.NUTRIENT, true, resAmt);
@@ -878,7 +878,7 @@
         const i = idx(x, y, cols);
         if (game.resources[i]) continue;
         if (!canHoldResource(game.terrain, life, i)) continue;
-        game.resources[i] = Math.random() < 0.16 ? RESOURCE.CRYSTAL : RESOURCE.NUTRIENT;
+        game.resources[i] = Math.random() < 0.45 ? RESOURCE.CRYSTAL : RESOURCE.NUTRIENT;
         if (game.resAmt) game.resAmt[i] = 1;
       }
     });
@@ -2476,24 +2476,24 @@
     if (seasonId === "winter" || seasonId === "drought" || seasonId === "flood") return;
     let current = countResources(game.resources);
     const areaMul = (cols * rows) / (200 * 120);
-    const tries = Math.round((seasonId === "rain" ? 22 : 10) * areaMul);
+    const tries = Math.round((seasonId === "rain" ? 28 : 14) * areaMul);
     for (let k = 0; k < tries && current < max; k++) {
       const x = randInt(cols);
       const y = randInt(rows);
-      if (lifeNear(game, x, y, 3)) continue;
+      if (lifeNear(game, x, y, 2)) continue;
       const i = idx(x, y, cols);
       if (game.stain && game.stain[i] >= 4) continue;
       const t = game.terrain[i];
       if (t === TERRAIN.ROCK || t === TERRAIN.WATER || t === TERRAIN.RIVER || t === TERRAIN.SNOW || t === TERRAIN.ICE) continue;
       if (game.resources[i]) continue;
       let p = 0.12;
-      let crystal = 0.12;
-      if (t === TERRAIN.GROVE || t === TERRAIN.MARSH || t === TERRAIN.FERTILE) p = 0.38;
-      else if (t === TERRAIN.SOIL) p = 0.2;
+      let crystal = 0.28;
+      if (t === TERRAIN.GROVE || t === TERRAIN.MARSH || t === TERRAIN.FERTILE) p = 0.42;
+      else if (t === TERRAIN.SOIL) p = 0.24;
       else if (t === TERRAIN.SAND) p = 0.07;
       else if (t === TERRAIN.HIGHLAND) {
         p = 0.16;
-        crystal = 0.4;
+        crystal = 0.55;
       }
       if (Math.random() > p) continue;
       game.resources[i] = Math.random() < crystal ? RESOURCE.CRYSTAL : RESOURCE.NUTRIENT;

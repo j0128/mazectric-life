@@ -10,8 +10,9 @@
     resist: { id: "resist", name: "抗災" },
     expand: { id: "expand", name: "拓殖" },
     sail: { id: "sail", name: "航海" },
+    farm: { id: "farm", name: "農" },
   };
-  const TRAIT_IDS = ["deep", "dike", "climb", "resist", "expand", "sail"];
+  const TRAIT_IDS = ["deep", "dike", "climb", "resist", "expand", "sail", "farm"];
   const LEGACIES = {
     memory: { id: "memory", name: "記旱" },
     rite: { id: "rite", name: "歲祀" },
@@ -58,6 +59,9 @@
   const ROLL_RETRY = 20;
   const EXPAND_CAP = 2;
   const NPC_MAX = 8;
+  const LIVING_CAP = 6;
+  const HUNGER_BREAK = 10;
+  const TOWNLESS_MAX = 16;
   const NPC_DIST = 12;
   const RUIN_MAX = 6;
   const RUIN_FOOD = 8;
@@ -74,8 +78,12 @@
     return 96 + Math.floor(Math.random() * 33) - 16;
   }
 
-  function npcWait() {
-    return 50 + Math.floor(Math.random() * 31);
+  function npcWait(game) {
+    const gen = (game && game.generation) || 0;
+    let base = 50 + Math.floor(Math.random() * 31);
+    if (gen > 4000) base = 220 + Math.floor(Math.random() * 121);
+    else if (gen > 2000) base = 140 + Math.floor(Math.random() * 81);
+    return base;
   }
 
   function emptyCivState() {
@@ -110,6 +118,7 @@
       raftIdle: {},
       crisisIn: crisisWait(),
       blowIn: blowWait(),
+      darkIn: darkWait(),
       stormTint: 0,
       stormPath: {},
       stormDir: { dx: 1, dy: 1 },
@@ -136,6 +145,10 @@
 
   function blowWait() {
     return 110 + Math.floor(Math.random() * 61);
+  }
+
+  function darkWait() {
+    return 180 + Math.floor(Math.random() * 121);
   }
 
   function idx(game, x, y) {
@@ -252,6 +265,168 @@
     const f = game.factions && game.factions[owner || 0];
     const tags = f && f.hero && f.hero.tags;
     return !!(tags && tags.indexOf(id) >= 0);
+  }
+
+  function livingFactionCount(game) {
+    let n = 0;
+    Object.keys(game.factions || {}).forEach(function (key) {
+      if (game.factions[key] && game.factions[key].alive) n += 1;
+    });
+    return n;
+  }
+
+  function factionHasSkill(game, who, id) {
+    const f = game.factions && game.factions[who || 0];
+    return !!(f && f.skills && f.skills[id]);
+  }
+
+  function hasFarm(game, settl) {
+    if (settl && settl.trait === "farm") return true;
+    return factionHasSkill(game, settl && settl.owner, "farm");
+  }
+
+  function mergeFactionSkills(dst, src) {
+    if (!dst.skills) dst.skills = {};
+    Object.keys((src && src.skills) || {}).forEach(function (id) {
+      dst.skills[id] = 1;
+    });
+  }
+
+  function reassignOwner(game, from, to) {
+    if (from === to) return;
+    if (game.owner) {
+      for (let i = 0; i < game.owner.length; i++) {
+        if (game.owner[i] === from) game.owner[i] = to;
+      }
+    }
+    (game.settlements || []).forEach(function (s) {
+      if ((s.owner || 0) !== from) return;
+      s.owner = to;
+      s.npc = to !== 0;
+      inheritFactionSkills(game, s);
+    });
+    (game.ghosts || []).forEach(function (s) {
+      if ((s.owner || 0) === from) s.owner = to;
+    });
+    (game.caravans || []).forEach(function (c) {
+      if ((c.owner || 0) === from) c.owner = to;
+    });
+  }
+
+  function absorbFaction(game, loser, winner, events) {
+    loser = loser || 0;
+    winner = winner || 0;
+    if (loser === winner) return false;
+    if (loser === 0) return false;
+    const lf = ensureFaction(game, loser);
+    const wf = ensureFaction(game, winner);
+    mergeFactionSkills(wf, lf);
+    const leftover = foodOf(game, loser);
+    if (leftover) {
+      spendFood(game, loser, leftover);
+      addFood(game, winner, leftover);
+    }
+    reassignOwner(game, loser, winner);
+    lf.alive = false;
+    lf.kingdom = false;
+    lf.empire = false;
+    lf.towns = 0;
+    lf.pop = 0;
+    lf.hungryStreak = 0;
+    if (game.foods) game.foods[loser] = 0;
+    events.push(civName(lf.n) + "併入" + civName(wf.n));
+    return true;
+  }
+
+  function pickAbsorbHost(game, who) {
+    const neigh = ownersTouching(game, who);
+    const lifeBy = ownerLifeCounts(game);
+    let best = null;
+    let bestPop = -1;
+    neigh.forEach(function (o) {
+      if (o === who) return;
+      const f = game.factions && game.factions[o];
+      if (!f || !f.alive) return;
+      const p = lifeBy[o] || 0;
+      if (p > bestPop) {
+        bestPop = p;
+        best = o;
+      }
+    });
+    return best;
+  }
+
+  function wipeOwnerCells(game, who, dropTowns) {
+    if (dropTowns) {
+      (game.settlements || []).forEach(function (s) {
+        if ((s.owner || 0) !== who) return;
+        const members = s.members;
+        (s.list || []).forEach(function (i) {
+          game.life[i] = 0;
+          if (game.owner) game.owner[i] = 0;
+        });
+        dropRuinFromMembers(game, members, s);
+      });
+    }
+    if (!game.life || !game.owner) return;
+    for (let i = 0; i < game.life.length; i++) {
+      if (game.owner[i] !== who) continue;
+      game.life[i] = 0;
+      game.owner[i] = 0;
+    }
+  }
+
+  function killSmallestTown(game, owner, events) {
+    const list = (game.settlements || []).filter(function (s) {
+      return (s.owner || 0) === owner;
+    });
+    if (list.length < 2) return false;
+    list.sort(function (a, b) {
+      return (a.size || 0) - (b.size || 0);
+    });
+    const town = list[0];
+    const members = town.members;
+    (town.list || []).forEach(function (i) {
+      game.life[i] = 0;
+      if (game.owner) game.owner[i] = 0;
+    });
+    dropRuinFromMembers(game, members, town);
+    events.push(civName(ensureFaction(game, owner).n) + "連饑，分鎮散了");
+    return true;
+  }
+
+  function scatterFaction(game, who, events) {
+    who = who || 0;
+    const f = ensureFaction(game, who);
+    if (who === 0 || f.kingdom || f.empire) {
+      scrapeOwner(game, who, 0.2);
+      f.hungryStreak = 0;
+      events.push(civName(f.n) + "連饑，走廊大減");
+      return false;
+    }
+    const host = pickAbsorbHost(game, who);
+    if (host != null) return absorbFaction(game, who, host, events);
+    wipeOwnerCells(game, who, true);
+    f.alive = false;
+    f.kingdom = false;
+    f.empire = false;
+    f.towns = 0;
+    f.pop = 0;
+    f.hungryStreak = 0;
+    if (game.foods) game.foods[who] = 0;
+    events.push(civName(f.n) + "因饑散族");
+    return true;
+  }
+
+  function markFactionExtinct(game, o, f, events) {
+    f.alive = false;
+    f.kingdom = false;
+    f.empire = false;
+    f.towns = 0;
+    f.pop = 0;
+    f.hungryStreak = 0;
+    if (o !== 0 && game.foods) game.foods[o] = 0;
+    events.push(civName(f.n) + "滅亡");
   }
 
   function countLife(game) {
@@ -386,29 +561,20 @@
     events.push(civName(f.n) + "出了" + heroLabel(tags) + "之主");
   }
 
-  function tryCivilSplit(game, events) {
+  function tryCivilSplit(game, events, forcedOwner) {
     const groups = {};
     (game.settlements || []).forEach(function (s) {
       const o = s.owner || 0;
       if (!groups[o]) groups[o] = [];
       groups[o].push(s);
     });
-    const keys = Object.keys(groups);
+    const keys = forcedOwner != null ? [String(forcedOwner)] : Object.keys(groups);
     for (let k = 0; k < keys.length; k++) {
       const o = Number(keys[k]);
-      const list = groups[o];
+      const list = groups[o] || [];
       if (list.length < 2) continue;
+      if (livingFactionCount(game) >= LIVING_CAP) continue;
       const f = game.factions[o];
-      let chance = 0.03;
-      if (isHungry(game, o)) chance += 0.08;
-      const pop = (f && f.pop) || 0;
-      if (pop >= 80) chance += 0.05;
-      if (hasHeroTag(game, o, "heirs")) chance += 0.14;
-      if (hasHeroTag(game, o, "suspect")) chance += 0.12;
-      if (hasHeroTag(game, o, "cruel")) chance += 0.07;
-      if (hasHeroTag(game, o, "humane")) chance *= 0.35;
-      if (hasHeroTag(game, o, "fool") && Math.random() < 0.5) continue;
-      if (Math.random() > chance) continue;
       list.sort(function (a, b) {
         return (a.size || 0) - (b.size || 0);
       });
@@ -430,9 +596,82 @@
         spendFood(game, o, share);
         addFood(game, who, share);
       }
+      if (f) f.hungryStreak = 0;
+      nf.hungryStreak = 0;
       events.push("內戰：" + civName((f && f.n) || 1) + "分裂出" + civName(nf.n));
+      return true;
+    }
+    return false;
+  }
+
+  function hungerBreakChance(game, o, f) {
+    let chance = 0.55;
+    if (hasHeroTag(game, o, "heirs")) chance += 0.18;
+    if (hasHeroTag(game, o, "suspect")) chance += 0.14;
+    if (hasHeroTag(game, o, "cruel")) chance += 0.08;
+    if (hasHeroTag(game, o, "humane")) chance *= 0.4;
+    if (hasHeroTag(game, o, "fool") && Math.random() < 0.5) return 0;
+    return chance;
+  }
+
+  function tryHungerBreak(game, events) {
+    const byOwner = {};
+    (game.settlements || []).forEach(function (s) {
+      const o = s.owner || 0;
+      if (!byOwner[o]) byOwner[o] = [];
+      byOwner[o].push(s);
+    });
+    const order = Object.keys(game.factions || {}).map(Number);
+    order.sort(function (a, b) {
+      const fa = game.factions[a];
+      const fb = game.factions[b];
+      return ((fb && fb.hungryStreak) || 0) - ((fa && fa.hungryStreak) || 0);
+    });
+    for (let k = 0; k < order.length; k++) {
+      const o = order[k];
+      const f = game.factions[o];
+      if (!f || !f.alive) continue;
+      if ((f.hungryStreak || 0) < HUNGER_BREAK) continue;
+      const towns = (byOwner[o] || []).length;
+      const atCap = livingFactionCount(game) >= LIVING_CAP;
+      if (towns >= 2 && !atCap && Math.random() < hungerBreakChance(game, o, f)) {
+        if (tryCivilSplit(game, events, o)) return;
+      }
+      if (towns >= 2 && atCap) {
+        killSmallestTown(game, o, events);
+        f.hungryStreak = 0;
+        return;
+      }
+      scatterFaction(game, o, events);
       return;
     }
+  }
+
+  function tryGhostFade(game, events) {
+    Object.keys(game.factions || {}).forEach(function (key) {
+      const o = Number(key);
+      const f = game.factions[o];
+      if (!f || !f.alive) return;
+      if (o === 0) return;
+      if ((f.townless || 0) < TOWNLESS_MAX) return;
+      const host = pickAbsorbHost(game, o);
+      if (host != null) absorbFaction(game, o, host, events);
+      else {
+        wipeOwnerCells(game, o, false);
+        markFactionExtinct(game, o, f, events);
+      }
+    });
+  }
+
+  function tryBorderAbsorb(game, loser, winner, events) {
+    if (loser === winner || loser === 0) return false;
+    const lf = game.factions && game.factions[loser];
+    if (!lf || !lf.alive || lf.kingdom || lf.empire) return false;
+    const towns = (lf.towns || 0);
+    const pop = lf.pop || 0;
+    if (towns > 1 && pop > 22) return false;
+    if (Math.random() > 0.16) return false;
+    return absorbFaction(game, loser, winner, events);
   }
 
   function updateFactions(game, events) {
@@ -452,8 +691,21 @@
       const o = Number(key);
       const f = game.factions[o];
       const info = byOwner[o];
+      const hasTown = !!(info && info.n);
+      if (hasTown) f.townless = 0;
+      else f.townless = (f.townless || 0) + 1;
+      if (isHungry(game, o)) f.hungryStreak = (f.hungryStreak || 0) + 1;
+      else f.hungryStreak = 0;
+    });
+    tryGhostFade(game, events);
+    Object.keys(game.factions).forEach(function (key) {
+      const o = Number(key);
+      const f = game.factions[o];
+      const info = byOwner[o];
       const cells = lifeBy[o] || 0;
-      const live = !!(info && info.n) || cells > 0;
+      const hasTown = !!(info && info.n);
+      const keepGhost = !hasTown && cells > 0 && (o === 0 || (f.townless || 0) < TOWNLESS_MAX);
+      const live = hasTown || keepGhost;
       if (live) {
         game.hadCiv = true;
         game.extinctShown = false;
@@ -476,16 +728,11 @@
         tryFactionTrait(game, f, events, info && info.sample);
         tickHero(game, f, events);
       } else if (f.alive) {
-        f.alive = false;
-        f.kingdom = false;
-        f.empire = false;
-        f.towns = 0;
-        f.pop = 0;
-        if (o !== 0 && game.foods) game.foods[o] = 0;
-        events.push(civName(f.n) + "滅亡");
+        wipeOwnerCells(game, o, false);
+        markFactionExtinct(game, o, f, events);
       }
     });
-    tryCivilSplit(game, events);
+    tryHungerBreak(game, events);
     return events;
   }
 
@@ -499,7 +746,7 @@
   }
 
   function isMajorEvent(text) {
-    return /學會|聚落形成|極端|地震|佔領遺址|因糧|過河|分家|出走|而遷|爐芯|王國|帝國|滅亡|全部消失|遠方出現|繼承了火種|之主|內戰|衝突|海底|火山|河口淤|開出田|土坡|山洪|決口|舊鎮荒了|離開了舊址|舊址生出|上香|還記得|歲祀的人說|舊爐還有人記得|多雨年|旱年|蟲疾|填了一段河|低地走成|積水成川|積了水|河枯成一線|乾河又來了水|海面漲了|潮退露出灘|季風轉向|林往前長|沙埋了地|填了一小塊海|海上有人住下來|船團散了|開出一條山口|船團|航海|大疫|倉中生霉|強震|颱風|疫過了邊境|中冰期|冷卻|酷熱|嚴寒|山脈|火山爆發|海嘯打上|年候將亂|地要裂/.test(
+    return /學會|聚落形成|極端|地震|佔領遺址|因糧|過河|分家|出走|而遷|爐芯|王國|帝國|滅亡|全部消失|遠方出現|繼承了火種|之主|內戰|衝突|海底|火山|河口淤|開出田|土坡|山洪|決口|舊鎮荒了|離開了舊址|舊址生出|上香|還記得|歲祀的人說|舊爐還有人記得|多雨年|旱年|蟲疾|填了一段河|低地走成|積水成川|積了水|河枯成一線|乾河又來了水|海面漲了|潮退露出灘|季風轉向|林往前長|沙埋了地|填了一小塊海|海上有人住下來|船團散了|開出一條山口|船團|航海|大疫|倉中生霉|強震|颱風|疫過了邊境|中冰期|冷卻|酷熱|嚴寒|山脈|火山爆發|海嘯打上|年候將亂|地要裂|併入|散族|分鎮散了|諸部離散|開出田糧/.test(
       text || ""
     );
   }
@@ -705,6 +952,7 @@
       scarce: 0,
       halls: 0,
       boats: 0,
+      lush: 0,
     };
   }
 
@@ -770,6 +1018,7 @@
     const list = settl.list || [];
     let water = 0;
     let rock = 0;
+    let lush = 0;
     let npc = false;
     for (let k = 0; k < list.length; k++) {
       const i = list[k];
@@ -778,6 +1027,8 @@
       const y = (i - x) / game.cols;
       if (cellTouchesWet(game, x, y)) water++;
       if (W.isRockAdjacent(game.terrain, x, y, game.cols, game.rows)) rock++;
+      const tt = game.terrain[i];
+      if (tt === TERRAIN.FERTILE || tt === TERRAIN.GROVE || tt === TERRAIN.MARSH) lush++;
       if (!npc && cellSeesNpc(game, x, y, who)) npc = true;
     }
     if (sid === "flood") bump(mem, "flood");
@@ -792,6 +1043,7 @@
     if (rock) bump(mem, "nearRock", rock > 3 ? 2 : 1);
     if (npc) bump(mem, "sawNpc");
     if (settl.size >= 22) bump(mem, "crowded");
+    if (lush) bump(mem, "lush", lush > 4 ? 2 : 1);
     if (localResourceScore(game, settl.cx, settl.cy) < 3) bump(mem, "scarce");
     const halls = hallCount(game, list);
     if (halls > mem.halls) mem.halls = halls;
@@ -837,6 +1089,10 @@
         tier((settl.memory || {}).nearWater, 8, 6) +
         tier((settl.memory || {}).flood, 6, 4) +
         tier((settl.memory || {}).boats, 1, 7),
+      1 +
+        tier((settl.memory || {}).hungry, 4, 5) +
+        tier((settl.memory || {}).drought, 8, 4) +
+        tier((settl.memory || {}).lush, 4, 7),
     ]);
   }
 
@@ -1045,7 +1301,7 @@
         addFood(game, who, gift);
         events.push("歲祀：+" + gift + " 糧");
       }
-      if (settl.age && settl.age % 8 === 0) harvestTown(game, settl);
+      if (settl.age && settl.age % (hasFarm(game, settl) ? 4 : 8) === 0) harvestTown(game, settl);
       next.push(settl);
     });
 
@@ -1599,11 +1855,38 @@
       const t = game.terrain[i];
       if (t === TERRAIN.FERTILE || t === TERRAIN.GROVE || t === TERRAIN.MARSH) lush += 1;
     });
-    if (!lush) return 0;
-    let gift = 1 + Math.min(2, Math.floor(lush / 8));
+    const farm = hasFarm(game, settl);
+    if (!lush && !farm) return 0;
+    let gift = lush ? 1 + Math.min(2, Math.floor(lush / 8)) : 0;
     if (settl.legacy === "rite") gift += 1;
-    addFood(game, settl.owner || 0, gift);
+    if (farm) gift = Math.max(2, gift * 2 + 1);
+    if (gift) addFood(game, settl.owner || 0, gift);
+    if (farm && Math.random() < 0.55) sowTownCrystal(game, settl);
     return gift;
+  }
+
+  function sowTownCrystal(game, settl) {
+    if (!game.resources || !settl || !settl.list) return false;
+    if (!game.resAmt || game.resAmt.length !== game.resources.length) {
+      game.resAmt = new Uint8Array(game.life.length);
+    }
+    const dirs = [[2, 0], [-2, 0], [0, 2], [0, -2], [3, 1], [-3, 1], [1, 3], [-1, -3]];
+    const ox = Math.round(settl.cx);
+    const oy = Math.round(settl.cy);
+    for (let t = 0; t < dirs.length; t++) {
+      const d = dirs[Math.floor(Math.random() * dirs.length)];
+      const x = W.wrap(ox + d[0], game.cols);
+      const y = oy + d[1];
+      if (y < 0 || y >= game.rows) continue;
+      const i = W.idx(x, y, game.cols);
+      if (game.life[i] || game.resources[i]) continue;
+      const tt = game.terrain[i];
+      if (tt === TERRAIN.ROCK || tt === TERRAIN.WATER || tt === TERRAIN.RIVER || tt === TERRAIN.SNOW) continue;
+      game.resources[i] = RESOURCE.CRYSTAL;
+      game.resAmt[i] = 1;
+      return true;
+    }
+    return false;
   }
 
   function foodWeight(game, i, cache) {
@@ -1642,14 +1925,13 @@
 
   function traitLabel(game) {
     const n = (game.settlements || []).length;
-    if (!n) return "0";
+    const live = livingFactionCount(game);
+    if (!n && !live) return "0";
     const f = game.factions && game.factions[0];
-    if (f && f.empire) return "文明一 · 帝國";
-    if (f && f.kingdom) return "文明一 · 王國";
-    const guest = (game.settlements || []).some(function (s) {
-      return s.npc;
-    });
-    return n + " 鎮" + (guest ? " · 有客族" : "");
+    const rank = f && f.empire ? "帝國" : f && f.kingdom ? "王國" : "";
+    const tribe = "活族 " + live;
+    if (rank) return "文明一 · " + rank + " · " + tribe;
+    return (n ? n + " 鎮 · " : "") + tribe;
   }
 
   function normCells(cells) {
@@ -1765,11 +2047,12 @@
 
   function trySpawnNpc(game, options) {
     options = options || {};
-    if (game.npcIn == null) game.npcIn = npcWait();
+    if (game.npcIn == null) game.npcIn = npcWait(game);
     game.npcIn -= 1;
     if (game.npcIn > 0) return null;
-    game.npcIn = npcWait();
+    game.npcIn = npcWait(game);
     if (options.flood) return null;
+    if (livingFactionCount(game) >= LIVING_CAP) return null;
     if (npcTownCount(game) >= NPC_MAX) return null;
     if (!game.owner) {
       game.owner = new Uint8Array(game.life.length);
@@ -2127,6 +2410,7 @@
     }
     if (caravan.owner > 0) events.push(walled ? "客族搶糧，城垣守住爐芯" : "客族來搶糧");
     else events.push(walled ? "因糧而戰，城垣守住爐芯" : "因糧而戰");
+    tryBorderAbsorb(game, victim, thief, events);
     return true;
   }
 
@@ -2461,6 +2745,7 @@
     if (settl.trait === "resist") return "災後有人出走";
     if (settl.trait === "deep") return "倉滿，分出一支部族";
     if (settl.trait === "sail") return "航海的人渡海分家";
+    if (settl.trait === "farm") return "農人開田分家";
     return "為尋資源而遷";
   }
 
@@ -2517,7 +2802,7 @@
       if (!townTouchesRiverOrIce(game, s)) return;
       if (snakeSlotFull(game)) return;
       if (snakeBusy(game, s)) return;
-      const chance = s.trait === "expand" ? 0.72 : s.trait === "dike" ? 0.55 : 0.48;
+      const chance = s.trait === "expand" ? 0.72 : s.trait === "dike" ? 0.55 : s.trait === "farm" ? 0.5 : 0.48;
       let roll = chance;
       if (hasHeroTag(game, s.owner, "settle") || hasHeroTag(game, s.owner, "vanity")) roll += 0.12;
       if (hasHeroTag(game, s.owner, "idle")) roll *= 0.5;
@@ -2612,6 +2897,7 @@
       if (Math.random() > chance) continue;
       const attacker = Math.random() < 0.5 ? h.a : h.b;
       const loser = attacker === h.a ? h.ni : h.i;
+      const loserOwner = attacker === h.a ? h.b : h.a;
       if (hasHeroTag(game, attacker, "cruel") || Math.random() < 0.55) {
         game.life[loser] = 0;
         game.owner[loser] = 0;
@@ -2619,6 +2905,7 @@
         game.owner[loser] = attacker;
       }
       fights += 1;
+      if (tryBorderAbsorb(game, loserOwner, attacker, events)) break;
     }
     if (fights) events.push("邊界衝突");
     return events;
@@ -3528,8 +3815,58 @@
     return true;
   }
 
+  function fireDarkAge(game, events) {
+    const lifeBy = ownerLifeCounts(game);
+    const small = [];
+    Object.keys(game.factions || {}).forEach(function (key) {
+      const o = Number(key);
+      const f = game.factions[o];
+      if (!f || !f.alive || o === 0) return;
+      if (f.kingdom || f.empire) {
+        if (Math.random() < 0.35) scrapeOwner(game, o, 0.08);
+        return;
+      }
+      small.push({ o: o, w: 8 + Math.max(1, 40 - (lifeBy[o] || 0)) + ((f.hungryStreak || 0) >= 4 ? 10 : 0) });
+    });
+    if (!small.length) return false;
+    let n = 1 + (small.length > 3 && Math.random() < 0.45 ? 1 : 0);
+    events.push("諸部離散");
+    while (n > 0 && small.length) {
+      let sum = 0;
+      small.forEach(function (s) {
+        sum += s.w;
+      });
+      let r = Math.random() * sum;
+      let pick = small[small.length - 1];
+      for (let i = 0; i < small.length; i++) {
+        r -= small[i].w;
+        if (r <= 0) {
+          pick = small[i];
+          small.splice(i, 1);
+          break;
+        }
+      }
+      const f = game.factions[pick.o];
+      if ((f.towns || 0) <= 1 && (lifeBy[pick.o] || 0) < 28) scatterFaction(game, pick.o, events);
+      else scrapeOwner(game, pick.o, 0.28);
+      n -= 1;
+    }
+    return true;
+  }
+
+  function tickDarkAge(game, events) {
+    if ((game.generation || 0) < 400) return;
+    if (game.darkIn == null) game.darkIn = darkWait();
+    game.darkIn -= 1;
+    if (game.darkIn > 0) return;
+    game.darkIn = darkWait();
+    if (livingFactionCount(game) < 4) return;
+    fireDarkAge(game, events);
+  }
+
   function tickRegionBlows(game) {
     const events = [];
+    tickDarkAge(game, events);
     if (game.stormTint) {
       game.stormTint = Math.max(0, game.stormTint - 1);
       if (!game.stormTint) game.stormPath = {};
