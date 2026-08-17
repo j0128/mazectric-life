@@ -78,6 +78,9 @@
   const ROLL_RETRY = 20;
   const CRAFT_AGE = 50;
   const CRAFT_RETRY = 16;
+  const ALPINE_AGE = 40;
+  const ALPINE_RETRY = 18;
+  const ALPINE_R = 10;
   const EXPAND_CAP = 2;
   const NPC_MAX = 8;
   const LIVING_CAP = 6;
@@ -809,7 +812,7 @@
   }
 
   function isMajorEvent(text) {
-    return /學會|工藝|聚落形成|極端|地震|佔領遺址|因糧|過河|分家|出走|而遷|爐芯|王國|帝國|滅亡|全部消失|遠方出現|繼承了火種|之主|內戰|衝突|海底|火山|河口淤|開出田|土坡|山洪|決口|舊鎮荒了|離開了舊址|舊址生出|上香|還記得|歲祀的人說|舊爐還有人記得|多雨年|旱年|蟲疾|填了一段河|低地走成|積水成川|積了水|河枯成一線|乾河又來了水|海面漲了|潮退露出灘|季風轉向|林往前長|沙埋了地|填了一小塊海|海上有人住下來|船團散了|開出一條山口|船團|航海|大疫|倉中生霉|強震|颱風|疫過了邊境|中冰期|冷卻|酷熱|嚴寒|山脈|火山爆發|海嘯打上|年候將亂|地要裂|併入|散族|分鎮散了|諸部離散|開出田糧|山沒裂/.test(
+    return /學會|工藝|越山|聚落形成|極端|地震|佔領遺址|因糧|過河|分家|出走|而遷|爐芯|王國|帝國|滅亡|全部消失|遠方出現|繼承了火種|之主|內戰|衝突|海底|火山|河口淤|開出田|土坡|山洪|決口|舊鎮荒了|離開了舊址|舊址生出|上香|還記得|歲祀的人說|舊爐還有人記得|多雨年|旱年|蟲疾|填了一段河|低地走成|積水成川|積了水|河枯成一線|乾河又來了水|海面漲了|潮退露出灘|季風轉向|林往前長|沙埋了地|填了一小塊海|海上有人住下來|船團散了|開出一條山口|船團|航海|大疫|倉中生霉|強震|颱風|疫過了邊境|中冰期|冷卻|酷熱|嚴寒|山脈|火山爆發|海嘯打上|年候將亂|地要裂|併入|散族|分鎮散了|諸部離散|開出田糧|山沒裂/.test(
       text || ""
     );
   }
@@ -1249,7 +1252,9 @@
             const ni = idx(game, cx + dirs[d][0], cy + dirs[d][1]);
             if (seen[ni] || !game.life[ni]) continue;
             if (ownerOf(game, ni) !== who) continue;
-            if (game.terrain[ni] === TERRAIN.ROCK || game.terrain[ni] === TERRAIN.SNOW) continue;
+            const nt = game.terrain[ni];
+            if (nt === TERRAIN.SNOW) continue;
+            if (nt === TERRAIN.ROCK && !inAlpine(game, ni)) continue;
             seen[ni] = 1;
             stack.push(ni);
           }
@@ -1327,6 +1332,55 @@
     }
   }
 
+  function inAlpine(game, i) {
+    return !!(game.alpineMask && game.alpineMask[i]);
+  }
+
+  function refreshAlpineMask(game) {
+    const n = (game.life && game.life.length) || 0;
+    if (!n) {
+      game.alpineMask = null;
+      return;
+    }
+    if (!game.alpineMask || game.alpineMask.length !== n) game.alpineMask = new Uint8Array(n);
+    else game.alpineMask.fill(0);
+    (game.settlements || []).forEach(function (s) {
+      if (!s.alpine) return;
+      const ox = Math.round(s.cx);
+      const oy = Math.round(s.cy);
+      for (let dy = -ALPINE_R; dy <= ALPINE_R; dy++) {
+        const y = oy + dy;
+        if (y < 0 || y >= game.rows) continue;
+        for (let dx = -ALPINE_R; dx <= ALPINE_R; dx++) {
+          if (dx * dx + dy * dy > ALPINE_R * ALPINE_R) continue;
+          const x = W.wrap(ox + dx, game.cols);
+          game.alpineMask[W.idx(x, y, game.cols)] = 1;
+        }
+      }
+    });
+  }
+
+  function tryAlpine(game, settl, events) {
+    if (!settl || settl.alpine) return;
+    if ((settl.age || 0) < ALPINE_AGE) return;
+    if (settl.alpineIn != null && (settl.age || 0) < settl.alpineIn) return;
+    const mem = settl.memory || emptyMemory();
+    if ((mem.nearRock || 0) < 8) return;
+    let high = 0;
+    (settl.list || []).forEach(function (i) {
+      if (!game.life[i]) return;
+      const t = game.terrain[i];
+      if (t === TERRAIN.HIGHLAND || t === TERRAIN.ROCK) high += 1;
+    });
+    if (high < 2 && (mem.nearRock || 0) < 14) return;
+    if (Math.random() < 0.55) {
+      settl.alpine = 1;
+      events.push("一座聚落學會了越山");
+    } else {
+      settl.alpineIn = (settl.age || 0) + ALPINE_RETRY;
+    }
+  }
+
   function withLineage(settl, src) {
     src = src || {};
     settl.craft = src.craft || null;
@@ -1341,6 +1395,8 @@
     settl.walled = !!src.walled;
     settl.seedIn = src.seedIn != null ? src.seedIn : 12 + Math.floor(Math.random() * 10);
     settl.riteVisitIn = src.riteVisitIn != null ? src.riteVisitIn : 28 + Math.floor(Math.random() * 20);
+    settl.alpine = src.alpine ? 1 : 0;
+    settl.alpineIn = src.alpineIn;
     return settl;
   }
 
@@ -1420,6 +1476,7 @@
       tryRoll(game, settl, events);
       tryCraft(game, settl, events);
       tryLegacy(game, settl, events);
+      tryAlpine(game, settl, events);
       if (settl.legacy === "rite" && settl.age % 16 === 0) {
         const who = settl.owner || 0;
         let gift = Math.min(6, Math.max(1, Math.floor(settl.size / 8)));
@@ -1474,6 +1531,7 @@
         tryRoll(game, settl, events);
         tryCraft(game, settl, events);
         tryLegacy(game, settl, events);
+        tryAlpine(game, settl, events);
         if (settl.age && settl.age % (hasFarm(game, settl) ? 4 : 8) === 0) harvestTown(game, settl);
         if (settl.age && settl.age % 6 === 0) craftTownYield(game, settl);
         next.push(settl);
@@ -1555,6 +1613,7 @@
     game.civCells = civCells;
     game.dikeCells = dikeCells;
     game.expandCells = expandCells;
+    refreshAlpineMask(game);
     updateFactions(game, events);
     return events;
   }
@@ -2066,7 +2125,11 @@
     if (!game.life[i]) return 0;
     if (cache && cache[i]) return 0;
     const spec = W.TERRAIN_LIFE[game.terrain[i]] || W.TERRAIN_LIFE[TERRAIN.SOIL];
-    const terra = spec.food == null ? 1 : spec.food;
+    const alpine = inAlpine(game, i);
+    const tt = game.terrain[i];
+    let terra = spec.food == null ? 1 : spec.food;
+    if (spec.dead) terra = 0;
+    if (alpine && tt === TERRAIN.ROCK) terra = 1.2;
     const s = game.civCells && game.civCells[i];
     let w = terra;
     if (s) {
@@ -2082,8 +2145,8 @@
       if (factionHasSkill(game, ownerOf(game, i), "herd")) w *= 0.7;
     }
     if (s && s.trait === "herd") w *= 0.92;
-    const tt = game.terrain[i];
     if (s && s.trait === "herd" && (tt === TERRAIN.SAND || tt === TERRAIN.HIGHLAND)) w *= 0.82;
+    if (alpine && tt === TERRAIN.HIGHLAND) w *= 0.85;
     if (isSpark(game, i)) w *= 0.55;
     w *= densityScale(game, s ? s.owner : ownerOf(game, i));
     return w;
@@ -4180,6 +4243,8 @@
     npcWait: npcWait,
     tickBorderWar: tickBorderWar,
     tickGlacialFood: tickGlacialFood,
+    refreshAlpineMask: refreshAlpineMask,
+    inAlpine: inAlpine,
     hasHeroTag: hasHeroTag,
     isEmpireOwner: isEmpireOwner,
     densityScale: densityScale,

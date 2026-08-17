@@ -1,3 +1,3 @@
 (function (global) {
-  global.GAME_VERSION = "4.0";
+  global.GAME_VERSION = "4.1";
 })(window);

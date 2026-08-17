@@ -26,6 +26,7 @@
   const chronicleTitleEl = document.getElementById("chronicle-title");
   const btnChronicle = document.getElementById("btn-chronicle");
   const btnChronicleClose = document.getElementById("chronicle-close");
+  let focusedOwner = null;
 
   const TERRAIN_COLOR = {
     0: [88, 128, 62],
@@ -99,6 +100,7 @@
     playing = false;
     btnPlay.textContent = "播放";
     btnPlay.classList.remove("playing");
+    focusedOwner = null;
     if (!game) game = engine.createGame(cols, rows);
     else engine.resizeMap(game, cols, rows);
     viewZoom = 1;
@@ -202,6 +204,9 @@
           (f.player ? "player" : "guest") +
           (f.alive ? "" : " dead") +
           (deadKing ? " was-kingdom" : "") +
+          (focusedOwner === f.owner ? " focused" : "") +
+          "\" data-owner=\"" +
+          f.owner +
           "\" style=\"" +
           border +
           "\"><div class=\"faction-head\"><strong>" +
@@ -757,8 +762,12 @@
         }
         paintCellFill(L.ox + x * size, L.oy + y * size, size, rgb, game.terrain[i], x, y);
         if (game.stain && game.stain[i] && !game.life[i]) {
-          const palette = STAIN_PALETTE[(game.stainWho[i] - 1 + STAIN_PALETTE.length) % STAIN_PALETTE.length];
-          const a = 0.22 + (game.stain[i] / 12) * 0.42;
+          const stainWho = game.stainWho && game.stainWho[i] ? game.stainWho[i] - 1 : 0;
+          const palette = STAIN_PALETTE[(stainWho + STAIN_PALETTE.length) % STAIN_PALETTE.length];
+          let a = 0.22 + (game.stain[i] / 12) * 0.42;
+          if (focusedOwner != null) {
+            a = stainWho === focusedOwner ? Math.min(0.72, a + 0.28) : a * 0.22;
+          }
           ctx.fillStyle = "rgba(" + palette[0] + "," + palette[1] + "," + palette[2] + "," + a + ")";
           ctx.fillRect(L.ox + x * size, L.oy + y * size, size, size);
         }
@@ -812,13 +821,29 @@
           ctx.fillStyle = color;
           const pad = size > 6 ? 1 : 0;
           ctx.fillRect(px + pad, py + pad, size - pad * 2, size - pad * 2);
-          if (town && size >= 3) {
+          if (focusedOwner != null) {
+            if (owner === focusedOwner) {
+              ctx.fillStyle = "rgba(255, 244, 196, 0.38)";
+              ctx.fillRect(px + pad, py + pad, size - pad * 2, size - pad * 2);
+              if (size >= 3) {
+                ctx.fillStyle = "#fff3b0";
+                ctx.fillRect(px, py, size, 1);
+                ctx.fillRect(px, py + size - 1, size, 1);
+                ctx.fillRect(px, py, 1, size);
+                ctx.fillRect(px + size - 1, py, 1, size);
+              }
+            } else {
+              ctx.fillStyle = "rgba(8, 10, 8, 0.62)";
+              ctx.fillRect(px + pad, py + pad, size - pad * 2, size - pad * 2);
+            }
+          }
+          if (town && size >= 3 && !(focusedOwner != null && owner === focusedOwner)) {
             ctx.fillStyle = "rgba(24, 16, 10, 0.78)";
             ctx.fillRect(px, py, size, 1);
             ctx.fillRect(px, py + size - 1, size, 1);
             ctx.fillRect(px, py, 1, size);
             ctx.fillRect(px + size - 1, py, 1, size);
-          } else if (size >= 4) {
+          } else if (size >= 4 && !(focusedOwner != null && owner === focusedOwner)) {
             ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
             ctx.fillRect(px + pad, py + pad, Math.max(1, size - pad * 2 - 1), 1);
           }
@@ -1093,6 +1118,17 @@
     canvas.style.cursor = "crosshair";
     draw();
   });
+
+  if (factionListEl) {
+    factionListEl.addEventListener("click", function (ev) {
+      const item = ev.target.closest(".faction-item");
+      if (!item) return;
+      const who = Number(item.getAttribute("data-owner"));
+      focusedOwner = focusedOwner === who ? null : who;
+      renderFactions();
+      draw();
+    });
+  }
 
   canvas.addEventListener("wheel", function (ev) {
     ev.preventDefault();

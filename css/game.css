@@ -257,6 +257,12 @@ button, input {
   border-radius: 8px;
   padding: 7px 8px 6px;
   background: #161c15;
+  cursor: pointer;
+}
+
+.faction-item.focused {
+  background: #24301c;
+  box-shadow: 0 0 0 1px #e8d48a, 0 0 10px rgba(232, 212, 138, 0.35);
 }
 
 .faction-item.player {

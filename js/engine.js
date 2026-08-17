@@ -227,6 +227,7 @@
     const i = W.idx(x, y, game.cols);
     const t = game.terrain[i];
     if (game.driedRiver && game.driedRiver[i]) return true;
+    if (t === TERRAIN.ROCK && game.alpineMask && game.alpineMask[i]) return true;
     return (
       t === TERRAIN.SOIL ||
       t === TERRAIN.FERTILE ||
@@ -637,6 +638,7 @@
     const terrain = game.terrain;
     const skills = gatherSkills(game);
     const Civ = global.LifeCiv;
+    if (Civ.refreshAlpineMask) Civ.refreshAlpineMask(game);
     if (Civ.markBoatCells) Civ.markBoatCells(game);
     if (Civ.growRaftFloor) Civ.growRaftFloor(game);
     const migrated = migrateSnakes(game, skills.snakes);
@@ -653,7 +655,8 @@
         const boat = game.boatCells && game.boatCells[i];
         const raft = game.raftCells && game.raftCells[i];
         const wet = t === TERRAIN.WATER || t === TERRAIN.RIVER;
-        if (t === TERRAIN.ROCK || t === TERRAIN.SNOW) {
+        const alpineRock = t === TERRAIN.ROCK && game.alpineMask && game.alpineMask[i];
+        if (t === TERRAIN.SNOW || (t === TERRAIN.ROCK && !alpineRock)) {
           next[i] = 0;
           continue;
         }
@@ -666,7 +669,11 @@
         const town = game.civCells && game.civCells[i];
         const memory = town && town.legacy === "memory";
         const high = town && town.trait === "climb" && memory && W.isRockAdjacent(terrain, x, y, cols, rows);
-        const maxLive = W.surviveMax(
+        const maxLive = alpineRock
+          ? drought
+            ? 2
+            : 3
+          : W.surviveMax(
           terrain,
           x,
           y,
@@ -679,7 +686,11 @@
         const house = forCA.cache && forCA.cache[i];
         const scatter = (game.glacialLeft || 0) > 0 && !town && !house;
         const need = scatter ? 2 : 1;
-        const crowdCap = scatter ? Math.min(crowd, 3) : crowd;
+        const crowdCap = alpineRock
+          ? Math.min(scatter ? Math.min(crowd, 3) : crowd, drought ? 2 : 3)
+          : scatter
+            ? Math.min(crowd, 3)
+            : crowd;
         if (wet) {
           if (raft) {
             if (alive) next[i] = n >= need && n <= crowdCap ? 1 : 0;

@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>生存遊戲 v4.0 · Mazectric</title>
-      <link rel="stylesheet" href="css/game.css">
+      <title>生存遊戲 v4.1 · Mazectric</title>
+      <link rel="stylesheet" href="css/game.css?v=4.1">
     </head>
     <body>
       <div id="app">
         <header class="topbar">
           <div class="title-block">
-            <h1>生存遊戲 <span class="ver" id="game-version">v4.0</span></h1>
+            <h1>生存遊戲 <span class="ver" id="game-version">v4.1</span></h1>
             <p>Mazectric 生命 · 演化殖民地　誕生 3 · 存活隨地形</p>
           </div>
       <div class="hud">
@@ -59,7 +59,7 @@
             文明
             <button id="btn-chronicle" type="button">大事紀</button>
           </h2>
-          <p class="hint">你是文明一。客族依出現順序編號。同族多鎮算同一個文明。每鎮同時生效特質、工藝、遺芳各一項；側欄列出全族聯集。連饑 10 代可能內戰或散族；被併入時技能會繼承。還在的排上面，滅亡的排後面。大疫時會標「疫」，缺糧標「饑」。</p>
+          <p class="hint">你是文明一。客族依出現順序編號。同族多鎮算同一個文明。點名稱可在地圖上突出該族。每鎮同時生效特質、工藝、遺芳各一項；側欄列出全族聯集。連饑 10 代可能內戰或散族；被併入時技能會繼承。還在的排上面，滅亡的排後面。大疫時會標「疫」，缺糧標「饑」。</p>
           <div id="faction-list" class="faction-list"></div>
         </section>
 
@@ -74,7 +74,7 @@
           <ul>
             <li><i class="swatch soil"></i>土壤 · 未開發疏林綠 · 誕生 3 · 存活 1–4 · 乾旱收成 1–3</li>
             <li><i class="swatch fertile"></i>沃土 · 較亮的草地 · 湖岸延續 · 存活 1–5 · 乾旱仍可 4 · 較省糧</li>
-            <li><i class="swatch rock"></i>岩石 · 無法生存 · 鄰格乾旱不收緊</li>
+            <li><i class="swatch rock"></i>岩石 · 平時無法生存；山邊鎮學會越山後，附近（約十格）可走岩脊、在高山活。雪山仍不能住</li>
             <li><i class="swatch water"></i>大海／湖 · 近岸有寒暖流；寒流岸較旱、暖流岸較潤。平時淹死；舊岸鎮可能在淺海落下筏屋</li>
             <li><i class="swatch river"></i>河流 · 從高處流入湖海 · 平時淹死</li>
             <li><i class="swatch ice"></i>冰面 · 冬季河凍，可走可種；解凍淹死</li>
@@ -89,7 +89,7 @@
             <li>構型技能會自己觸發：方塊窖藏、長廊耐旱、拐角發芽、短蛇避水</li>
             <li>連通 12 格且含實心 2×2 成為聚落。每鎮三槽：約 30 代特質（深倉／堤防／登高／抗災／拓殖／航海／農／牧／漁）、約 50 代工藝（陶／輪／灌／織／鹽／銅）、約 80 代或三火種遺芳（記旱／歲祀／回爐／加護／城垣／律／市）</li>
             <li>地圖上那座鎮只用自己掛的三項；側欄袋子會聯集多鎮與併吞。陶減霉與凍腐、輪讓陸隊走更遠、灌扛旱、織定時進糧、鹽沙岸多收、銅邊界較兇。牧省走廊糧；漁貼水回倉、不派船團。律壓內戰；市催結晶與商隊</li>
-            <li>登高：雨季末期往岩邊、離水處撤。堤防：留下守岸。城垣：長廊成牆，擋災變與搶糧，地震先砸牆和屋</li>
+            <li>山邊久住的鎮可能自己學會越山（不佔特質／工藝／遺芳、不進全族袋子）：只有那座鎮附近能翻岩石脊。遠方同族不會。登高仍是雨季往高處撤</li>
             <li>有特質的鎮會自己分家；冬天貼河的鎮可能沿冰過河。幼苗一時不怕弱災，走廊也可能自己冒出爐芯</li>
             <li>有特質的鎮也會派短蛇商隊；河流平時擋路，冰上才能把火種送到對岸</li>
             <li>各族各自一袋糧食；頂欄是文明一的倉。走廊較省、鎮在沃土／林／澤會回倉。結晶進踩到那格的文明。農／灌多收、漁貼水、牧走廊較便宜。連饑滿 10 代：有兩鎮可能內戰（有律則大減），否則立刻散族或被鄰族吃掉（技能與餘糧跟著併入）。王國可內戰、不因饑滅號。頂欄「鎮／族」含活著的族數（不含遺跡）</li>
@@ -150,12 +150,12 @@
     </div>
   </div>
 
-  <script src="js/version.js"></script>
-  <script src="js/patterns.js"></script>
-  <script src="js/world.js"></script>
-  <script src="js/gallery.js"></script>
-  <script src="js/civ.js"></script>
-  <script src="js/engine.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/version.js?v=4.1"></script>
+  <script src="js/patterns.js?v=4.1"></script>
+  <script src="js/world.js?v=4.1"></script>
+  <script src="js/gallery.js?v=4.1"></script>
+  <script src="js/civ.js?v=4.1"></script>
+  <script src="js/engine.js?v=4.1"></script>
+  <script src="js/app.js?v=4.1"></script>
 </body>
 </html>
