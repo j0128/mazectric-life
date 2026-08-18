@@ -229,7 +229,8 @@
     const i = W.idx(x, y, game.cols);
     const t = game.terrain[i];
     if (game.driedRiver && game.driedRiver[i]) return true;
-    if (t === TERRAIN.ROCK && game.alpineMask && game.alpineMask[i]) return true;
+    if (t === TERRAIN.ROCK && ((game.alpineMask && game.alpineMask[i]) || (game.ironMask && game.ironMask[i]) || (game.dwellMask && game.dwellMask[i]))) return true;
+    if (t === TERRAIN.SNOW && game.dwellMask && game.dwellMask[i] && global.LifeCiv.snowFringeCell && global.LifeCiv.snowFringeCell(game, x, y)) return true;
     if (t === TERRAIN.RIVER && game.fordMask && game.fordMask[i]) return true;
     return (
       t === TERRAIN.SOIL ||
@@ -257,7 +258,10 @@
       let foodGain = [0, 8, 12, 16][amt];
       const enGain = [0, 4, 5, 7][amt];
       if (game.ore && game.ore[i] && global.LifeCiv.ownerHasCraft && global.LifeCiv.ownerHasCraft(game, who, "copper")) {
-        foodGain = Math.ceil(foodGain * 1.5);
+        let mul = 1.5;
+        if (global.LifeCiv.ownerHasCraft(game, who, "iron")) mul = 1.75;
+        else if (global.LifeCiv.ownerHasCraft(game, who, "bronze")) mul = 1.6;
+        foodGain = Math.ceil(foodGain * mul);
       }
       if (game.ore) game.ore[i] = 0;
       game.energy += enGain;
@@ -581,6 +585,7 @@
         game.iceAge = true;
         W.freezeRivers(game, true);
       } else {
+        if (global.LifeCiv.evacuateIceWalk) global.LifeCiv.evacuateIceWalk(game, isPlantable);
         W.thawRivers(game);
         const mud = W.thawMud(game);
         global.LifeCiv.washRuins(game);
@@ -662,9 +667,17 @@
         const boat = game.boatCells && game.boatCells[i];
         const raft = game.raftCells && game.raftCells[i];
         const wet = t === TERRAIN.WATER || t === TERRAIN.RIVER;
-        const alpineRock = t === TERRAIN.ROCK && game.alpineMask && game.alpineMask[i];
+        const alpineRock =
+          t === TERRAIN.ROCK &&
+          ((game.alpineMask && game.alpineMask[i]) || (game.ironMask && game.ironMask[i]) || (game.dwellMask && game.dwellMask[i]));
+        const snowFringe =
+          t === TERRAIN.SNOW &&
+          game.dwellMask &&
+          game.dwellMask[i] &&
+          Civ.snowFringeCell &&
+          Civ.snowFringeCell(game, x, y);
         const fordRiver = t === TERRAIN.RIVER && game.fordMask && game.fordMask[i];
-        if (t === TERRAIN.SNOW || (t === TERRAIN.ROCK && !alpineRock)) {
+        if ((t === TERRAIN.SNOW && !snowFringe) || (t === TERRAIN.ROCK && !alpineRock)) {
           next[i] = 0;
           continue;
         }
@@ -677,7 +690,7 @@
         const town = game.civCells && game.civCells[i];
         const memory = town && town.legacy === "memory";
         const high = town && town.trait === "climb" && memory && W.isRockAdjacent(terrain, x, y, cols, rows);
-        const maxLive = alpineRock || fordRiver
+        const maxLive = alpineRock || fordRiver || snowFringe
           ? drought
             ? 2
             : 3
@@ -694,7 +707,7 @@
         const house = forCA.cache && forCA.cache[i];
         const scatter = (game.glacialLeft || 0) > 0 && !town && !house;
         const need = scatter ? 2 : 1;
-        const crowdCap = alpineRock || fordRiver
+        const crowdCap = alpineRock || fordRiver || snowFringe
           ? Math.min(scatter ? Math.min(crowd, 3) : crowd, drought ? 2 : 3)
           : scatter
             ? Math.min(crowd, 3)
@@ -714,7 +727,8 @@
           (n === 2 &&
             (sprout[i] ||
               t === TERRAIN.GROVE ||
-              (game.groveMask && game.groveMask[i] && (t === TERRAIN.GROVE || t === TERRAIN.MARSH))))
+              (game.groveMask && game.groveMask[i] && (t === TERRAIN.GROVE || t === TERRAIN.MARSH)) ||
+              (game.ironMask && game.ironMask[i] && (t === TERRAIN.GROVE || t === TERRAIN.MARSH))))
         )
           next[i] = 1;
         else next[i] = 0;
@@ -807,6 +821,7 @@
 
     const changed = advanceSeason(game);
     Civ.recordChronicle(game, game.events);
+    if (Civ.flattenEvents) game.events = Civ.flattenEvents(game.events);
     const extinct = Civ.checkExtinct(game);
     return {
       starved: starved,
@@ -819,6 +834,29 @@
     };
   }
 
+  function neighborCivOwner(game, x, y) {
+    if (!game.owner) return 0;
+    let unique = 0;
+    let found = false;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const ny = y + dy;
+        if (ny < 0 || ny >= game.rows) continue;
+        const nx = W.wrap(x + dx, game.cols);
+        const i = W.idx(nx, ny, game.cols);
+        if (!game.life[i]) continue;
+        const o = game.owner[i] || 0;
+        if (!o) continue;
+        if (!found) {
+          unique = o;
+          found = true;
+        } else if (o !== unique) return 0;
+      }
+    }
+    return found ? unique : 0;
+  }
+
   function plant(game, x, y) {
     if (!isPlantable(game, x, y)) return false;
     const i = W.idx(x, y, game.cols);
@@ -826,7 +864,7 @@
     if (game.energy < 1) return false;
     game.energy -= 1;
     game.life[i] = 1;
-    if (game.owner) game.owner[i] = 0;
+    if (game.owner) game.owner[i] = neighborCivOwner(game, x, y);
     if (game.resources[i]) harvestCell(game, i);
     return true;
   }
@@ -859,7 +897,7 @@
       const y = mapY(oy + cells[i][1], game.rows);
       const id = W.idx(x, y, game.cols);
       game.life[id] = 1;
-      if (game.owner) game.owner[id] = 0;
+      if (game.owner) game.owner[id] = neighborCivOwner(game, x, y);
       if (game.resources[id]) harvestCell(game, id);
     }
     return true;

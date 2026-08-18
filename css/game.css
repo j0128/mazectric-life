@@ -265,6 +265,16 @@ button, input {
   box-shadow: 0 0 0 1px #e8d48a, 0 0 10px rgba(232, 212, 138, 0.35);
 }
 
+.faction-item.dimmed {
+  opacity: 0.38;
+}
+
+.faction-place {
+  font-size: 12px;
+  color: #c8b67a;
+  margin-top: 2px;
+}
+
 .faction-item.player {
   border-color: #c48a3a;
 }

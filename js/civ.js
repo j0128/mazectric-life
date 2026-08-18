@@ -32,8 +32,14 @@
     weave: { id: "weave", name: "織" },
     salt: { id: "salt", name: "鹽" },
     copper: { id: "copper", name: "銅" },
+    bronze: { id: "bronze", name: "青銅" },
+    iron: { id: "iron", name: "鐵" },
   };
   const CRAFT_IDS = ["pot", "wheel", "irrigate", "weave", "salt", "copper"];
+  const METAL_IDS = ["copper", "bronze", "iron"];
+  const METAL_NEXT = { copper: "bronze", bronze: "iron" };
+  const METAL_MIN_GEN = { bronze: 1000, iron: 2000 };
+  const METAL_RETRY = 28;
   const HERO_TAGS = {
     humane: { id: "humane", name: "仁政" },
     birth: { id: "birth", name: "多產" },
@@ -67,6 +73,7 @@
   function landSnakeBlocked(game, settl) {
     if (!snakeSlotFull(game)) return false;
     if (settl && hasCraft(settl, "wheel") && Math.random() < 0.55) return false;
+    if (settl && settl.farSail && Math.random() < 0.55) return false;
     return true;
   }
   const HALL_WALL = 4;
@@ -129,6 +136,8 @@
       ruinSites: [],
       caravans: [],
       tollPeace: {},
+      tollTrust: {},
+      freshSites: [],
       extremeTint: 0,
       quakeTint: 0,
       pestTint: 0,
@@ -192,6 +201,20 @@
 
   const NPC_START_FOOD = 28;
 
+  function watchFood(game, focused) {
+    if (focused != null && game.factions && game.factions[focused] && game.factions[focused].n) {
+      return foodOf(game, focused);
+    }
+    let best = null;
+    Object.keys(game.factions || {}).forEach(function (key) {
+      const f = game.factions[key];
+      if (!f || !f.alive || !f.n) return;
+      if (!best || f.n < best.n) best = { owner: Number(key), n: f.n };
+    });
+    if (best) return foodOf(game, best.owner);
+    return foodOf(game, 0);
+  }
+
   function foodOf(game, who) {
     who = who || 0;
     if (!game.foods) game.foods = { 0: game.food || 0 };
@@ -245,8 +268,69 @@
   }
 
   function civName(n) {
-    if (n <= 1) return "文明一";
+    n = Math.floor(Number(n) || 0);
+    if (n <= 0) return "無名";
     return "第" + hanOrdinal(n) + "文明";
+  }
+
+  function shuffleInPlace(list) {
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = list[i];
+      list[i] = list[j];
+      list[j] = t;
+    }
+    return list;
+  }
+
+  function nextOrdinal(game) {
+    let max = 0;
+    Object.keys(game.factions || {}).forEach(function (key) {
+      const n = (game.factions[key] && game.factions[key].n) || 0;
+      if (n > max) max = n;
+    });
+    return max + 1;
+  }
+
+  function mintOrdinal(game) {
+    return nextOrdinal(game);
+  }
+
+  function allocOwner(game) {
+    let who = game.nextNpcOwner || 1;
+    if (who < 1) who = 1;
+    if (who > 250) {
+      const used = {};
+      Object.keys(game.factions || {}).forEach(function (key) {
+        used[Number(key)] = 1;
+      });
+      (game.settlements || []).forEach(function (s) {
+        used[s.owner || 0] = 1;
+      });
+      who = 1;
+      while (who < 255 && used[who]) who += 1;
+    }
+    game.nextNpcOwner = who + 1;
+    return who;
+  }
+
+  function factionOrdinal(game, owner) {
+    const f = game.factions && game.factions[owner];
+    return (f && f.n) || 0;
+  }
+
+  function stampTownOwner(game, settl) {
+    const who = settl.owner || 0;
+    if (!who || !game.owner || !settl.list) return;
+    settl.list.forEach(function (i) {
+      if (game.life[i]) game.owner[i] = who;
+    });
+  }
+
+  function mintOrdinals(count, start) {
+    const nums = [];
+    for (let i = 0; i < count; i++) nums.push(start + i);
+    return shuffleInPlace(nums);
   }
 
   function ownerLifeCounts(game) {
@@ -264,9 +348,8 @@
     if (!game.factions) game.factions = {};
     const o = owner || 0;
     if (game.factions[o]) return game.factions[o];
-    const n = o + 1;
     game.factions[o] = {
-      n: n,
+      n: 0,
       skills: {},
       peak: 0,
       kingdom: false,
@@ -300,7 +383,7 @@
   function livingFactionCount(game) {
     let n = 0;
     Object.keys(game.factions || {}).forEach(function (key) {
-      if (game.factions[key] && game.factions[key].alive) n += 1;
+      if (game.factions[key] && game.factions[key].alive && game.factions[key].n) n += 1;
     });
     return n;
   }
@@ -324,11 +407,18 @@
   }
 
   function hasCraft(settl, id) {
-    return !!(settl && settl.craft === id);
+    if (!settl || !settl.craft) return false;
+    if (settl.craft === id) return true;
+    if (id === "copper") return settl.craft === "bronze" || settl.craft === "iron";
+    if (id === "bronze") return settl.craft === "iron";
+    return false;
   }
 
   function ownerHasCraft(game, who, id) {
-    return factionHasSkill(game, who, id);
+    if (factionHasSkill(game, who, id)) return true;
+    if (id === "copper") return factionHasSkill(game, who, "bronze") || factionHasSkill(game, who, "iron");
+    if (id === "bronze") return factionHasSkill(game, who, "iron");
+    return false;
   }
 
   function mergeFactionSkills(dst, src) {
@@ -363,7 +453,6 @@
     loser = loser || 0;
     winner = winner || 0;
     if (loser === winner) return false;
-    if (loser === 0) return false;
     const lf = ensureFaction(game, loser);
     const wf = ensureFaction(game, winner);
     mergeFactionSkills(wf, lf);
@@ -444,7 +533,7 @@
   function scatterFaction(game, who, events) {
     who = who || 0;
     const f = ensureFaction(game, who);
-    if (who === 0 || f.kingdom || f.empire) {
+    if (f.kingdom || f.empire) {
       scrapeOwner(game, who, 0.2);
       f.hungryStreak = 0;
       events.push(civName(f.n) + "連饑，走廊大減");
@@ -510,7 +599,24 @@
     return null;
   }
 
+  function metalRank(id) {
+    if (id === "iron") return 3;
+    if (id === "bronze") return 2;
+    if (id === "copper") return 1;
+    return 0;
+  }
+
   function factionCraftId(f) {
+    let best = null;
+    let rank = 0;
+    for (let i = 0; i < METAL_IDS.length; i++) {
+      const id = METAL_IDS[i];
+      if (f.skills && f.skills[id] && metalRank(id) > rank) {
+        best = id;
+        rank = metalRank(id);
+      }
+    }
+    if (best) return best;
     for (let i = 0; i < CRAFT_IDS.length; i++) {
       if (f.skills && f.skills[CRAFT_IDS[i]]) return CRAFT_IDS[i];
     }
@@ -637,9 +743,9 @@
         return (a.size || 0) - (b.size || 0);
       });
       const splinter = list[0];
-      const who = game.nextNpcOwner || 1;
-      game.nextNpcOwner = who + 1;
+      const who = allocOwner(game);
       const nf = ensureFaction(game, who);
+      nf.n = mintOrdinal(game);
       nf.alive = true;
       Object.keys((f && f.skills) || {}).forEach(function (id) {
         if (Math.random() < 0.5) nf.skills[id] = 1;
@@ -717,7 +823,6 @@
       const o = Number(key);
       const f = game.factions[o];
       if (!f || !f.alive) return;
-      if (o === 0) return;
       if ((f.townless || 0) < TOWNLESS_MAX) return;
       const host = pickAbsorbHost(game, o);
       if (host != null) absorbFaction(game, o, host, events);
@@ -729,7 +834,7 @@
   }
 
   function tryBorderAbsorb(game, loser, winner, events) {
-    if (loser === winner || loser === 0) return false;
+    if (loser === winner) return false;
     const lf = game.factions && game.factions[loser];
     if (!lf || !lf.alive || lf.kingdom || lf.empire) return false;
     const towns = (lf.towns || 0);
@@ -747,6 +852,7 @@
     const byOwner = {};
     (game.settlements || []).forEach(function (s) {
       const o = s.owner || 0;
+      if (!o) return;
       if (!byOwner[o]) byOwner[o] = { n: 0, pop: 0, sample: s };
       byOwner[o].n += 1;
       byOwner[o].pop += s.size || 0;
@@ -775,7 +881,7 @@
       const info = byOwner[o];
       const cells = lifeBy[o] || 0;
       const hasTown = !!(info && info.n);
-      const keepGhost = !hasTown && cells > 0 && (o === 0 || (f.townless || 0) < TOWNLESS_MAX);
+      const keepGhost = !hasTown && cells > 0 && (f.townless || 0) < TOWNLESS_MAX;
       const live = hasTown || keepGhost;
       if (live) {
         game.hadCiv = true;
@@ -807,24 +913,41 @@
     return events;
   }
 
-  function logChronicle(game, text) {
+  function eventText(e) {
+    if (e == null) return "";
+    return typeof e === "string" ? e : String(e.text || "");
+  }
+
+  function eventOwnerOf(e) {
+    if (e && typeof e === "object" && e.owner != null) return e.owner;
+    return null;
+  }
+
+  function flattenEvents(events) {
+    return (events || []).map(eventText).filter(Boolean);
+  }
+
+  function logChronicle(game, text, owner) {
     if (!text) return;
     if (!game.chronicle) game.chronicle = [];
     const last = game.chronicle[game.chronicle.length - 1];
     if (last && last.text === text && last.gen === game.generation) return;
-    game.chronicle.push({ gen: game.generation || 0, text: text });
+    const row = { gen: game.generation || 0, text: text };
+    if (owner != null) row.owner = owner;
+    game.chronicle.push(row);
     if (game.chronicle.length > 80) game.chronicle.shift();
   }
 
   function isMajorEvent(text) {
-    return /學會|工藝|越山|涉水|林棲|聚落形成|極端|地震|佔領遺址|因糧|過河|分家|出走|而遷|爐芯|王國|帝國|滅亡|全部消失|遠方出現|繼承了火種|之主|內戰|衝突|海底|火山|河口淤|開出田|土坡|山洪|決口|舊鎮荒了|離開了舊址|舊址生出|上香|還記得|歲祀的人說|舊爐還有人記得|多雨年|旱年|蟲疾|填了一段河|低地走成|積水成川|積了水|河枯成一線|乾河又來了水|海面漲了|潮退露出灘|季風轉向|林往前長|沙埋了地|填了一小塊海|海上有人住下來|船團散了|開出一條山口|船團|航海|大疫|倉中生霉|強震|颱風|疫過了邊境|中冰期|冷卻|酷熱|嚴寒|山脈|火山爆發|海嘯打上|年候將亂|地要裂|併入|散族|分鎮散了|諸部離散|開出田糧|山沒裂|過路留糧|岸將遷|岸線大退|湖沼擴張|岸線漸漸|湖沼退了/.test(
+    return /學會|工藝|越山|涉水|林棲|遠航|冰行|山居|聚落形成|極端|地震|佔領遺址|因糧|過河|過海|分家|出走|而遷|爐芯|王國|帝國|滅亡|全部消失|遠方出現|遠方有人|繼承了火種|之主|內戰|衝突|海底|火山|河口淤|開出田|土坡|山洪|決口|舊鎮荒了|離開了舊址|舊址生出|上香|還記得|歲祀的人說|舊爐還有人記得|多雨年|旱年|蟲疾|填了一段河|低地走成|積水成川|積了水|河枯成一線|乾河又來了水|海面漲了|潮退露出灘|季風轉向|林往前長|沙埋了地|填了一小塊海|海上有人住下來|船團散了|開出一條山口|船團|航海|大疫|倉中生霉|強震|颱風|疫過了邊境|中冰期|冷卻|酷熱|嚴寒|山脈|火山爆發|海嘯打上|年候將亂|地要裂|併入|散族|分鎮散了|諸部離散|開出田糧|山沒裂|過路留糧|岸將遷|岸線大退|湖沼擴張|岸線漸漸|湖沼退了|青銅|學會了鐵/.test(
       text || ""
     );
   }
 
   function recordChronicle(game, events) {
     (events || []).forEach(function (e) {
-      if (isMajorEvent(e)) logChronicle(game, e);
+      const text = eventText(e);
+      if (isMajorEvent(text)) logChronicle(game, text, eventOwnerOf(e));
     });
   }
 
@@ -836,9 +959,10 @@
     const lifeBy = ownerLifeCounts(game);
     let someone = false;
     Object.keys(game.factions || {}).forEach(function (key) {
+      const f = game.factions[key];
+      if (!f || !f.n) return;
       if ((lifeBy[Number(key)] || 0) > 0) someone = true;
     });
-    if (!someone && (lifeBy[0] || 0) > 0 && game.hadCiv) someone = true;
     if (towns > 0 || ghost || someone) {
       if (towns > 0 || someone) {
         game.hadCiv = true;
@@ -856,10 +980,31 @@
     const out = [];
     Object.keys(game.factions || {}).forEach(function (key) {
       const f = game.factions[key];
+      if (!f || !f.n) return;
       const skills = [];
-      Object.keys(f.skills || {}).forEach(function (id) {
+      const bag = f.skills || {};
+      Object.keys(bag).forEach(function (id) {
+        if (id === "copper" && (bag.bronze || bag.iron)) return;
+        if (id === "bronze" && bag.iron) return;
         const spec = TRAITS[id] || LEGACIES[id] || CRAFTS[id];
         if (spec) skills.push(spec.name);
+      });
+      const place = [];
+      const placeSeen = {};
+      (game.settlements || []).forEach(function (s) {
+        if ((s.owner || 0) !== Number(key)) return;
+        [
+          s.alpine && "越山",
+          s.ford && "涉水",
+          s.groveWalk && "林棲",
+          s.farSail && "遠航",
+          s.iceWalk && "冰行",
+          s.alpineLive && "山居",
+        ].forEach(function (name) {
+          if (!name || placeSeen[name]) return;
+          placeSeen[name] = 1;
+          place.push(name);
+        });
       });
       let rank = "遺跡";
       if (f.alive) {
@@ -874,9 +1019,10 @@
         name: civName(f.n),
         rank: rank,
         skills: skills,
+        place: place,
         hero: heroLabel(f.hero && f.hero.tags),
         alive: !!f.alive,
-        player: Number(key) === 0,
+        player: false,
         food: foodOf(game, Number(key)),
         hungry: isHungry(game, Number(key)),
         wasKingdom: !!f.wasKingdom,
@@ -924,7 +1070,7 @@
         const o = ownerOf(game, ni);
         counts[o] = (counts[o] || 0) + 1;
         const n = counts[o];
-        if (n > bestN || (n === bestN && o === 0)) {
+        if (n > bestN || (n === bestN && o && !best)) {
           bestN = n;
           best = o;
         }
@@ -1004,6 +1150,7 @@
     if (resist && ward) chance = [0.12, 0.06, 0.03][p];
     else if (resist || ward) chance = [0.2, 0.12, 0.06][p];
     if (s && s.legacy === "wall" && s.walled) chance *= 0.65;
+    if (s && hasCraft(s, "bronze")) chance *= 0.82;
     if (isKingdomOwner(game, s && s.owner)) chance *= 0.7;
     return chance;
   }
@@ -1027,6 +1174,7 @@
       dryland: 0,
       rot: 0,
       towns: 0,
+      cold: 0,
     };
   }
 
@@ -1259,8 +1407,8 @@
             if (seen[ni] || !game.life[ni]) continue;
             if (ownerOf(game, ni) !== who) continue;
             const nt = game.terrain[ni];
-            if (nt === TERRAIN.SNOW) continue;
-            if (nt === TERRAIN.ROCK && !inPlaceMask(game, "alpineMask", ni)) continue;
+            if (nt === TERRAIN.SNOW && !(inPlaceMask(game, "dwellMask", ni) && snowFringeCell(game, ni % cols, (ni - (ni % cols)) / cols))) continue;
+            if (nt === TERRAIN.ROCK && !inPlaceMask(game, "alpineMask", ni) && !inPlaceMask(game, "ironMask", ni) && !inPlaceMask(game, "dwellMask", ni)) continue;
             if (nt === TERRAIN.WATER && !(game.raftCells && game.raftCells[ni]) && !(game.dikeCells && game.dikeCells[ni])) continue;
             if (nt === TERRAIN.RIVER && !inPlaceMask(game, "fordMask", ni) && !(game.dikeCells && game.dikeCells[ni]) && !(game.driedRiver && game.driedRiver[ni])) continue;
             seen[ni] = 1;
@@ -1319,24 +1467,62 @@
     if (potencyOf(settl) < 1) return;
     settl.legacy = pickLegacy(settl);
     rememberSkills(game, settl);
-    events.push("一座聚落學會了遺芳「" + LEGACIES[settl.legacy].name + "」");
+    events.push({ text: "一座聚落學會了遺芳「" + LEGACIES[settl.legacy].name + "」", owner: settl.owner || 0 });
   }
 
   function tryCraft(game, settl, events) {
     inheritFactionSkills(game, settl);
-    if (settl.craft) {
+    if (!settl.craft) {
+      if (!settl.trait) return;
+      if ((settl.age || 0) < CRAFT_AGE && potencyOf(settl) < 1) return;
+      if (settl.craftIn != null && (settl.age || 0) < settl.craftIn) return;
+      if (Math.random() < 0.62) {
+        settl.craft = pickCraft(settl);
+        rememberSkills(game, settl);
+        events.push({ text: "一座聚落學會了工藝「" + CRAFTS[settl.craft].name + "」", owner: settl.owner || 0 });
+      } else {
+        settl.craftIn = (settl.age || 0) + CRAFT_RETRY;
+      }
+    } else {
       rememberSkills(game, settl);
+    }
+    tryMetalUpgrade(game, settl, events);
+  }
+
+  function townHasMetalNeed(game, settl) {
+    const mem = settl.memory || emptyMemory();
+    if ((mem.nearRock || 0) >= 6) return true;
+    let hit = 0;
+    (settl.list || []).forEach(function (i) {
+      if (!game.life[i]) return;
+      const t = game.terrain[i];
+      if (t === TERRAIN.HIGHLAND || t === TERRAIN.ROCK) hit += 1;
+      if (game.ore && game.ore[i]) hit += 2;
+    });
+    return hit >= 2;
+  }
+
+  function tryMetalUpgrade(game, settl, events) {
+    if (!settl || !settl.craft) return;
+    const next = METAL_NEXT[settl.craft];
+    if (!next) return;
+    const needGen = METAL_MIN_GEN[next];
+    if ((game.generation || 0) < needGen) return;
+    if (settl.metalIn != null && (settl.age || 0) < settl.metalIn) return;
+    if (!townHasMetalNeed(game, settl) && Math.random() < 0.55) {
+      settl.metalIn = (settl.age || 0) + METAL_RETRY;
       return;
     }
-    if (!settl.trait) return;
-    if ((settl.age || 0) < CRAFT_AGE && potencyOf(settl) < 1) return;
-    if (settl.craftIn != null && (settl.age || 0) < settl.craftIn) return;
-    if (Math.random() < 0.62) {
-      settl.craft = pickCraft(settl);
+    if (Math.random() < 0.38) {
+      settl.craft = next;
+      settl.metalIn = undefined;
       rememberSkills(game, settl);
-      events.push("一座聚落學會了工藝「" + CRAFTS[settl.craft].name + "」");
+      events.push({
+        text: next === "bronze" ? "一座聚落把銅煉成了青銅" : "一座聚落學會了鐵",
+        owner: settl.owner || 0,
+      });
     } else {
-      settl.craftIn = (settl.age || 0) + CRAFT_RETRY;
+      settl.metalIn = (settl.age || 0) + METAL_RETRY;
     }
   }
 
@@ -1376,17 +1562,49 @@
     fillPlaceMask(game, "alpineMask", "alpine");
     fillPlaceMask(game, "fordMask", "ford");
     fillPlaceMask(game, "groveMask", "groveWalk");
+    fillPlaceMask(game, "iceWalkMask", "iceWalk");
+    fillPlaceMask(game, "dwellMask", "alpineLive");
+    fillCraftMask(game, "ironMask", "iron");
   }
 
-  function tryPlaceSkill(game, settl, events, flag, needFn, label) {
+  function fillCraftMask(game, maskKey, craftId) {
+    const n = (game.life && game.life.length) || 0;
+    if (!n) {
+      game[maskKey] = null;
+      return;
+    }
+    if (!game[maskKey] || game[maskKey].length !== n) game[maskKey] = new Uint8Array(n);
+    else game[maskKey].fill(0);
+    (game.settlements || []).forEach(function (s) {
+      if (s.craft !== craftId) return;
+      const ox = Math.round(s.cx);
+      const oy = Math.round(s.cy);
+      for (let dy = -ALPINE_R; dy <= ALPINE_R; dy++) {
+        const y = oy + dy;
+        if (y < 0 || y >= game.rows) continue;
+        for (let dx = -ALPINE_R; dx <= ALPINE_R; dx++) {
+          if (dx * dx + dy * dy > ALPINE_R * ALPINE_R) continue;
+          const x = W.wrap(ox + dx, game.cols);
+          game[maskKey][W.idx(x, y, game.cols)] = 1;
+        }
+      }
+    });
+  }
+
+  function tryPlaceSkill(game, settl, events, flag, needFn, label, boostFn) {
     if (!settl || settl[flag]) return;
-    if ((settl.age || 0) < ALPINE_AGE) return;
+    const ageNeed = settl.freshSite ? 12 : ALPINE_AGE;
+    if ((settl.age || 0) < ageNeed) return;
     const waitKey = flag + "In";
     if (settl[waitKey] != null && (settl.age || 0) < settl[waitKey]) return;
     if (!needFn(game, settl)) return;
-    if (Math.random() < 0.55) {
+    let p = 0.55;
+    if (settl.freshSite) p += 0.22;
+    if (boostFn) p = boostFn(game, settl, p);
+    if (p > 0.88) p = 0.88;
+    if (Math.random() < p) {
       settl[flag] = 1;
-      events.push("一座聚落學會了" + label);
+      events.push({ text: "一座聚落學會了" + label, owner: settl.owner || 0 });
     } else {
       settl[waitKey] = (settl.age || 0) + ALPINE_RETRY;
     }
@@ -1403,7 +1621,9 @@
         if (t === TERRAIN.HIGHLAND || t === TERRAIN.ROCK) high += 1;
       });
       return high >= 2 || (mem.nearRock || 0) >= 14;
-    }, "越山");
+    }, "越山", function (g, s, p) {
+      return s.trait === "climb" ? p + 0.12 : p;
+    });
   }
 
   function tryFord(game, settl, events) {
@@ -1434,6 +1654,53 @@
     }, "林棲");
   }
 
+  function tryFarSail(game, settl, events) {
+    tryPlaceSkill(game, settl, events, "farSail", function (g, s) {
+      const mem = s.memory || emptyMemory();
+      if ((mem.nearWater || 0) < 10 && (mem.boats || 0) < 1) return false;
+      return townTouchesSea(g, s) || (mem.boats || 0) >= 1;
+    }, "遠航", function (g, s, p) {
+      if (s.trait === "sail" || factionHasSkill(g, s.owner || 0, "sail")) return p + 0.22;
+      return p;
+    });
+  }
+
+  function tryIceWalk(game, settl, events) {
+    tryPlaceSkill(game, settl, events, "iceWalk", function (g, s) {
+      const mem = s.memory || emptyMemory();
+      if (townTouchesRiverOrIce(g, s)) return true;
+      return (mem.cold || 0) >= 6;
+    }, "冰行", function (g, s, p) {
+      if (s.trait === "sail" || s.trait === "fish") return p + 0.14;
+      return p;
+    });
+  }
+
+  function tryAlpineLive(game, settl, events) {
+    tryPlaceSkill(game, settl, events, "alpineLive", function (g, s) {
+      if (!s.alpine) return false;
+      const mem = s.memory || emptyMemory();
+      let high = 0;
+      (s.list || []).forEach(function (i) {
+        if (!g.life[i]) return;
+        const t = g.terrain[i];
+        if (t === TERRAIN.HIGHLAND || t === TERRAIN.ROCK) high += 1;
+      });
+      return high >= 3 || (mem.nearRock || 0) >= 12;
+    }, "山居", function (g, s, p) {
+      return s.trait === "climb" ? p + 0.2 : p;
+    });
+  }
+
+  function tryLocalSkills(game, settl, events) {
+    tryAlpine(game, settl, events);
+    tryFord(game, settl, events);
+    tryGroveWalk(game, settl, events);
+    tryFarSail(game, settl, events);
+    tryIceWalk(game, settl, events);
+    tryAlpineLive(game, settl, events);
+  }
+
   function withLineage(settl, src) {
     src = src || {};
     settl.craft = src.craft || null;
@@ -1454,6 +1721,14 @@
     settl.fordIn = src.fordIn;
     settl.groveWalk = src.groveWalk ? 1 : 0;
     settl.groveWalkIn = src.groveWalkIn;
+    settl.farSail = src.farSail ? 1 : 0;
+    settl.farSailIn = src.farSailIn;
+    settl.iceWalk = src.iceWalk ? 1 : 0;
+    settl.iceWalkIn = src.iceWalkIn;
+    settl.alpineLive = src.alpineLive ? 1 : 0;
+    settl.alpineLiveIn = src.alpineLiveIn;
+    settl.freshSite = src.freshSite ? 1 : 0;
+    settl.metalIn = src.metalIn;
     return settl;
   }
 
@@ -1470,7 +1745,7 @@
     if (Math.random() < 0.7) {
       settl.trait = pickTrait(settl);
       rememberSkills(game, settl);
-      events.push("一座聚落學會了" + TRAITS[settl.trait].name);
+      events.push({ text: "一座聚落學會了" + TRAITS[settl.trait].name, owner: settl.owner || 0 });
     } else {
       settl.nextRoll = age + ROLL_RETRY;
       f.nextRoll = settl.nextRoll;
@@ -1533,9 +1808,7 @@
       tryRoll(game, settl, events);
       tryCraft(game, settl, events);
       tryLegacy(game, settl, events);
-      tryAlpine(game, settl, events);
-      tryFord(game, settl, events);
-      tryGroveWalk(game, settl, events);
+      tryLocalSkills(game, settl, events);
       if (settl.legacy === "rite" && settl.age % 16 === 0) {
         const who = settl.owner || 0;
         let gift = Math.min(6, Math.max(1, Math.floor(settl.size / 8)));
@@ -1545,9 +1818,11 @@
       }
       if (settl.age && settl.age % (hasFarm(game, settl) ? 4 : 8) === 0) harvestTown(game, settl);
       if (settl.age && settl.age % 6 === 0) craftTownYield(game, settl);
+      stampTownOwner(game, settl);
       next.push(settl);
     });
 
+    const founders = [];
     civGroups.forEach(function (g, n) {
       if (usedNew[n]) return;
       let ghost = null;
@@ -1590,15 +1865,25 @@
         tryRoll(game, settl, events);
         tryCraft(game, settl, events);
         tryLegacy(game, settl, events);
-        tryAlpine(game, settl, events);
-        tryFord(game, settl, events);
-        tryGroveWalk(game, settl, events);
+        tryLocalSkills(game, settl, events);
         if (settl.age && settl.age % (hasFarm(game, settl) ? 4 : 8) === 0) harvestTown(game, settl);
         if (settl.age && settl.age % 6 === 0) craftTownYield(game, settl);
+        stampTownOwner(game, settl);
         next.push(settl);
         if (ghost.age < 2 && !settl.npc) events.push("一座聚落形成");
       } else {
-        const npc = !!g.npc;
+        founders.push(g);
+      }
+    });
+
+    if (founders.length) {
+      const novel = [];
+      founders.forEach(function (g) {
+        const named = g.owner && factionOrdinal(game, g.owner);
+        if (!named) {
+          novel.push(g);
+          return;
+        }
         const settl = withLineage({
           id: game.nextSettleId++,
           members: g.members,
@@ -1608,21 +1893,62 @@
           cy: g.cy,
           age: 1,
           trait: null,
-          nextRoll: npc ? 9999 : ROLL_AGE,
+          nextRoll: ROLL_AGE,
           miss: 0,
-          npc: npc,
-          owner: g.owner || 0,
+          npc: !!g.npc,
+          owner: g.owner,
           hearthDropped: false,
         }, { id: game.nextSettleId });
         settl.lineageId = settl.id;
         inheritFactionSkills(game, settl);
         tallyExperience(game, settl);
-        if (npc && !settl.trait) settl.trait = pickTrait(settl);
+        if (takeFreshSite(game, settl)) settl.freshSite = 1;
         rememberSkills(game, settl);
+        stampTownOwner(game, settl);
         next.push(settl);
-        if (!npc) events.push("一座聚落形成");
+      });
+      if (novel.length) {
+        const nums = mintOrdinals(novel.length, nextOrdinal(game));
+        const wild = novel.filter(function (g) {
+          return !g.owner;
+        });
+        const pool = foodOf(game, 0);
+        const share = wild.length ? Math.floor(pool / wild.length) : 0;
+        if (share) spendFood(game, 0, share * wild.length);
+        novel.forEach(function (g, i) {
+          const who = g.owner ? g.owner : allocOwner(game);
+          const f = ensureFaction(game, who);
+          if (!f.n) f.n = nums[i];
+          f.alive = true;
+          const spawned = !!g.npc && !!g.owner;
+          const settl = withLineage({
+            id: game.nextSettleId++,
+            members: g.members,
+            list: g.list,
+            size: g.size,
+            cx: g.cx,
+            cy: g.cy,
+            age: 1,
+            trait: null,
+            nextRoll: spawned ? 9999 : ROLL_AGE,
+            miss: 0,
+            npc: spawned,
+            owner: who,
+            hearthDropped: false,
+          }, { id: game.nextSettleId });
+          settl.lineageId = settl.id;
+          inheritFactionSkills(game, settl);
+          tallyExperience(game, settl);
+          if (takeFreshSite(game, settl)) settl.freshSite = 1;
+          if (spawned && !settl.trait) settl.trait = pickTrait(settl);
+          rememberSkills(game, settl);
+          stampTownOwner(game, settl);
+          if (!spawned) addFood(game, who, Math.max(share, 12));
+          next.push(settl);
+          events.push((spawned ? "遠方出現" : "一座聚落形成：") + civName(f.n));
+        });
       }
-    });
+    }
 
     const ghosts = [];
     for (let p = 0; p < prev.length; p++) {
@@ -1973,7 +2299,9 @@
   }
 
   function scaleQuake(pKill, game, s) {
-    if (isKingdomOwner(game, s && s.owner)) return pKill * 0.85;
+    if (isKingdomOwner(game, s && s.owner)) pKill *= 0.85;
+    if (s && hasCraft(s, "bronze")) pKill *= 0.82;
+    if (s && s.trait === "dike" && hasCraft(s, "bronze")) pKill *= 0.9;
     return pKill;
   }
 
@@ -2104,6 +2432,7 @@
     let wet = 0;
     let sand = 0;
     let shore = 0;
+    let high = 0;
     (settl.list || []).forEach(function (i) {
       if (!game.life[i]) return;
       const t = game.terrain[i];
@@ -2111,6 +2440,7 @@
       const y = (i - x) / game.cols;
       if (t === TERRAIN.FERTILE || t === TERRAIN.GROVE || t === TERRAIN.MARSH) lush += 1;
       if (t === TERRAIN.SAND) sand += 1;
+      if (t === TERRAIN.HIGHLAND || t === TERRAIN.ROCK) high += 1;
       if (cellTouchesWet(game, x, y)) {
         wet += 1;
         shore += 1;
@@ -2122,7 +2452,7 @@
     const salt = hasCraft(settl, "salt");
     const sid = seasonIdOf(game);
     const glacial = !!(game.glacialLeft > 0);
-    if (!lush && !farm && !fish && !salt) return 0;
+    if (!lush && !farm && !fish && !salt && !(settl.alpineLive && high)) return 0;
     let gift = lush ? 1 + Math.min(2, Math.floor(lush / 8)) : 0;
     if (settl.legacy === "rite") gift += 1;
     if (farm) gift = Math.max(2, gift * 2 + 1);
@@ -2134,6 +2464,7 @@
       gift += catchN;
     }
     if (salt) gift += 1 + Math.min(2, Math.floor((sand + shore) / 8));
+    if (settl.alpineLive && high) gift += 1 + Math.min(2, Math.floor(high / 6));
     if (glacial) gift = Math.max(0, Math.floor(gift * 0.45));
     if (gift) addFood(game, settl.owner || 0, gift);
     if ((farm || settl.legacy === "market") && Math.random() < (settl.legacy === "market" ? 0.7 : 0.55)) {
@@ -2191,6 +2522,8 @@
     let terra = spec.food == null ? 1 : spec.food;
     if (spec.dead) terra = 0;
     if (alpine && tt === TERRAIN.ROCK) terra = 1.2;
+    if (inPlaceMask(game, "ironMask", i) && tt === TERRAIN.ROCK) terra = 1.2;
+    if (inPlaceMask(game, "dwellMask", i) && tt === TERRAIN.ROCK) terra = 1.05;
     if (inPlaceMask(game, "fordMask", i) && tt === TERRAIN.RIVER) terra = 1.15;
     const s = game.civCells && game.civCells[i];
     let w = terra;
@@ -2209,6 +2542,7 @@
     if (s && s.trait === "herd") w *= 0.92;
     if (s && s.trait === "herd" && (tt === TERRAIN.SAND || tt === TERRAIN.HIGHLAND)) w *= 0.82;
     if (alpine && tt === TERRAIN.HIGHLAND) w *= 0.85;
+    if (inPlaceMask(game, "dwellMask", i) && tt === TERRAIN.HIGHLAND) w *= 0.8;
     if (isSpark(game, i)) w *= 0.55;
     w *= densityScale(game, s ? s.owner : ownerOf(game, i));
     return w;
@@ -2232,10 +2566,18 @@
     const n = (game.settlements || []).length;
     const live = livingFactionCount(game);
     if (!n && !live) return "0";
-    const f = game.factions && game.factions[0];
-    const rank = f && f.empire ? "帝國" : f && f.kingdom ? "王國" : "";
+    const rankF = (function () {
+      let best = null;
+      Object.keys(game.factions || {}).forEach(function (key) {
+        const f = game.factions[key];
+        if (!f || !f.alive || !f.n) return;
+        if (!best || f.n < best.n) best = f;
+      });
+      return best;
+    })();
+    const rank = rankF && rankF.empire ? "帝國" : rankF && rankF.kingdom ? "王國" : "";
     const tribe = "活族 " + live;
-    if (rank) return "文明一 · " + rank + " · " + tribe;
+    if (rank) return civName(rankF.n) + " · " + rank + " · " + tribe;
     return (n ? n + " 鎮 · " : "") + tribe;
   }
 
@@ -2377,9 +2719,7 @@
       if (score >= 32) break;
     }
     if (!best) return null;
-    const who = game.nextNpcOwner || 1;
-    game.nextNpcOwner = who + 1;
-    ensureFaction(game, who).alive = true;
+    const who = allocOwner(game);
     best.cells.forEach(function (p) {
       const x = W.wrap(best.ox + p[0], game.cols);
       const y = best.oy + p[1];
@@ -2389,7 +2729,7 @@
       game.owner[i] = who;
     });
     addFood(game, who, NPC_START_FOOD);
-    return "遠方出現" + civName(who + 1);
+    return "遠方有人住下來";
   }
 
   const SNAKE_SRC_CELLS = [
@@ -2546,7 +2886,7 @@
         if (game.owner) game.owner[i] = settl.owner || 0;
       });
       markSpark(game, cells);
-      const lifeMax = kind === "fleet" ? FLEET_MAX_AGE : kind === "boat" ? 48 : kind === "migrate" ? 48 : 40;
+      const lifeMax = kind === "fleet" ? FLEET_MAX_AGE : kind === "boat" ? (settl.farSail ? 64 : 48) : kind === "migrate" ? 48 : 40;
       game.caravans.push({
         cells: cells,
         owner: settl.owner || 0,
@@ -2559,7 +2899,7 @@
         target: target,
         kind: kind || "culture",
         age: 0,
-        maxAge: lifeMax + (hasCraft(settl, "wheel") && kind !== "boat" && kind !== "fleet" ? 16 : 0),
+        maxAge: lifeMax + (hasCraft(settl, "wheel") && kind !== "boat" && kind !== "fleet" ? 16 : 0) + (hasCraft(settl, "bronze") && kind !== "fleet" ? 10 : 0),
         wheel: !!(hasCraft(settl, "wheel") && kind !== "boat" && kind !== "fleet"),
       });
       return true;
@@ -2568,6 +2908,7 @@
   }
 
   function spawnCaravan(game, settl, isPlantable) {
+    if (settl.trait === "fish" && Math.random() < 0.72) return false;
     return spawnSnake(game, settl, pickCaravanTarget(game, settl), isPlantable, "culture");
   }
 
@@ -2618,7 +2959,8 @@
       const parties = [];
       const used = [];
       let ok = true;
-      for (let p = 0; p < 3; p++) {
+      const partyN = settl.farSail && hasSail(game, settl) ? 3 : settl.farSail ? 2 : 3;
+      for (let p = 0; p < partyN; p++) {
         const shape = shapes[(attempt + p) % shapes.length];
         const bx = W.wrap(ox + dirX * (1 + (attempt % 5)) + px * p * 4 + (attempt % 3) - 1, game.cols);
         const by = oy + dirY * (1 + (attempt % 5)) + py * p * 4 + (Math.floor(attempt / 3) % 3) - 1;
@@ -2655,7 +2997,7 @@
         target: target,
         kind: "fleet",
         age: 0,
-        maxAge: FLEET_MAX_AGE,
+        maxAge: settl.farSail && hasSail(game, settl) ? 32 : settl.farSail ? 28 : FLEET_MAX_AGE,
       });
       return true;
     }
@@ -2728,6 +3070,45 @@
 
   const OUTPOST_SRC = VILLAGE_SRC;
 
+  function markFreshSite(game, cells, owner) {
+    if (!cells || !cells.length) return;
+    let sx = 0;
+    let sy = 0;
+    let n = 0;
+    cells.forEach(function (i) {
+      sx += i % game.cols;
+      sy += (i - (i % game.cols)) / game.cols;
+      n += 1;
+    });
+    if (!n) return;
+    if (!game.freshSites) game.freshSites = [];
+    game.freshSites.push({
+      cx: sx / n,
+      cy: sy / n,
+      owner: owner || 0,
+      until: (game.generation || 0) + 16,
+    });
+  }
+
+  function takeFreshSite(game, settl) {
+    const sites = game.freshSites || [];
+    if (!sites.length || !settl) return false;
+    const gen = game.generation || 0;
+    const keep = [];
+    let hit = false;
+    sites.forEach(function (site) {
+      if ((site.until || 0) < gen) return;
+      const dist = wrapDelta(site.cx, settl.cx, game.cols) + distY(site.cy, settl.cy);
+      if (!hit && dist <= 8 && (site.owner || 0) === (settl.owner || 0)) {
+        hit = true;
+        return;
+      }
+      keep.push(site);
+    });
+    game.freshSites = keep;
+    return hit;
+  }
+
   function findOutpostCells(game, live, isPlantable, maxAttempt, reserved) {
     if (!live || !live.length) return null;
     const i0 = live[0];
@@ -2777,6 +3158,7 @@
       if (game.owner) game.owner[i] = who;
     });
     markSpark(game, cells);
+    markFreshSite(game, cells, who);
     return true;
   }
 
@@ -2847,6 +3229,7 @@
       });
       markSpark(game, cells);
     });
+    markFreshSite(game, planned[0], who);
     return true;
   }
 
@@ -3073,10 +3456,25 @@
       s.seedIn -= 1;
       if (s.seedIn > 0) return;
       s.seedIn = seedWait(s, game);
+      if (isHungry(game, s.owner) && s.trait !== "resist") return;
       if (packed > 0.32 && !hasHeroTag(game, s.owner, "vanity") && Math.random() < packed) return;
       if (s.trait === "resist" && !(s.memory && s.memory.disaster) && Math.random() < 0.5) return;
-      if (landSnakeBlocked(game, s)) return;
       if (snakeBusy(game, s)) return;
+      if ((s.trait === "sail" || s.farSail) && townTouchesSea(game, s) && !townOnRaft(game, s)) {
+        if (snakeSlotFull(game) && !(s.farSail && Math.random() < 0.55)) {
+          /* fall through to land if slots full */
+        } else {
+          const sea = pickBoatTarget(game, s, isPlantable);
+          if (sea && spawnSnake(game, s, sea, isPlantable, "boat")) {
+            const mem = s.memory || emptyMemory();
+            s.memory = mem;
+            bump(mem, "boats", 1);
+            events.push(seedLabel(s));
+            return;
+          }
+        }
+      }
+      if (landSnakeBlocked(game, s)) return;
       const target = pickSeedTarget(game, s, isPlantable);
       if (target && spawnSnake(game, s, target, isPlantable, "migrate")) {
         events.push(seedLabel(s));
@@ -3109,6 +3507,29 @@
     });
   }
 
+  function pickIceSeaTarget(game, settl, isPlantable) {
+    return pickLandTarget(game, settl, isPlantable, function (g, x, y, dist, t) {
+      if (dist < 16 || dist > 52) return -1;
+      let ice = 0;
+      const cols = g.cols;
+      let dx = x - settl.cx;
+      if (dx > cols / 2) dx -= cols;
+      if (dx < -cols / 2) dx += cols;
+      for (let s = 1; s <= 6; s++) {
+        const px = W.wrap(Math.round(settl.cx + (dx * s) / 7), cols);
+        const py = Math.round(settl.cy + ((y - settl.cy) * s) / 7);
+        if (py < 0 || py >= g.rows) continue;
+        const tt = g.terrain[W.idx(px, py, cols)];
+        if (tt === TERRAIN.ICE) ice += 2;
+        else if (tt === TERRAIN.WATER) ice += 1;
+      }
+      if (ice < 3) return dist * 0.05;
+      let sc = 8 + ice + Math.min(28, dist) * 0.35;
+      if (t === TERRAIN.FERTILE) sc += 2;
+      return sc;
+    });
+  }
+
   function tryWinterCrossings(game, isPlantable) {
     const events = [];
     if (!game.caravans) game.caravans = [];
@@ -3119,15 +3540,18 @@
       if (snakeBusy(game, s)) return;
       const chance = s.trait === "expand" ? 0.72 : s.trait === "dike" ? 0.55 : s.trait === "farm" ? 0.5 : 0.48;
       let roll = chance;
+      if (s.iceWalk) roll += 0.28;
       if (hasHeroTag(game, s.owner, "settle") || hasHeroTag(game, s.owner, "vanity")) roll += 0.12;
       if (hasHeroTag(game, s.owner, "idle")) roll *= 0.5;
       if (Math.random() > roll) return;
-      const target = pickCrossTarget(game, s, isPlantable);
+      const target = s.iceWalk
+        ? pickIceSeaTarget(game, s, isPlantable) || pickCrossTarget(game, s, isPlantable)
+        : pickCrossTarget(game, s, isPlantable);
       if (!target) return;
       if (spawnSnake(game, s, target, isPlantable, "migrate")) {
         const last = game.caravans[game.caravans.length - 1];
-        if (last) last.maxAge = last.wheel ? 46 : 30;
-        events.push("沿冰過河");
+        if (last) last.maxAge = s.iceWalk ? last.wheel ? 56 : 48 : last.wheel ? 46 : 30;
+        events.push(s.iceWalk ? "沿冰過海" : "沿冰過河");
       }
     });
     return events;
@@ -3152,17 +3576,20 @@
 
   function tickPressure(game, isPlantable, events) {
     (game.settlements || []).forEach(function (s) {
-      if (!wantRaid(game, s)) return;
       if (landSnakeBlocked(game, s)) return;
       if (snakeBusy(game, s)) return;
-      const foe = pickRaidTarget(game, s);
-      if (foe) {
-        if (spawnSnake(game, s, foe, isPlantable, "raid")) {
-          s.hungryStreak = 0;
+      if (wantRaid(game, s)) {
+        const foe = pickRaidTarget(game, s);
+        if (foe) {
+          if (spawnSnake(game, s, foe, isPlantable, "raid")) {
+            s.hungryStreak = 0;
+          }
+          return;
         }
-        return;
-      }
-      if (s.trait !== "expand" && !hasHeroTag(game, s.owner, "settle") && !hasHeroTag(game, s.owner, "vanity")) {
+        if (s.trait !== "expand" && !hasHeroTag(game, s.owner, "settle") && !hasHeroTag(game, s.owner, "vanity")) {
+          return;
+        }
+      } else if (!(isHungry(game, s.owner) && Math.random() < 0.55)) {
         return;
       }
       const res = pickMigrateTarget(game, s, isPlantable);
@@ -3204,7 +3631,9 @@
       const h = hits[Math.floor(Math.random() * hits.length)];
       let chance = 0.12;
       if (haveTollPeace(game, h.a, h.b)) chance *= 0.35;
+      if (tollTrustOf(game, h.a, h.b) >= 3) chance *= 0.55;
       if (ownerHasCraft(game, h.a, "copper") || ownerHasCraft(game, h.b, "copper")) chance += 0.1;
+      if (ownerHasCraft(game, h.a, "iron") || ownerHasCraft(game, h.b, "iron")) chance += 0.06;
       if (hasHeroTag(game, h.a, "warlord") || hasHeroTag(game, h.a, "endless")) chance += 0.1;
       if (hasHeroTag(game, h.b, "warlord") || hasHeroTag(game, h.b, "endless")) chance += 0.06;
       if (hasHeroTag(game, h.a, "cruel") || hasHeroTag(game, h.b, "cruel")) chance += 0.06;
@@ -3274,7 +3703,8 @@
       const i = W.idx(x, y, game.cols);
       if (game.life[i]) continue;
       const dist = wrapDelta(x, settl.cx, game.cols) + distY(y, settl.cy);
-      if (dist < 10 || dist > 48) continue;
+      const far = !!(settl.farSail || settl.trait === "sail");
+      if (dist < (far ? 12 : 10) || dist > (far ? 72 : 48)) continue;
       let wealth = dist * 0.25;
       for (let dy = -4; dy <= 4; dy++) {
         for (let dx = -4; dx <= 4; dx++) {
@@ -3305,8 +3735,9 @@
       const i = W.idx(x, y, game.cols);
       if (game.life[i]) continue;
       const dist = wrapDelta(x, settl.cx, game.cols) + distY(y, settl.cy);
-      if (dist < 6 || dist > 18) continue;
-      let wealth = 12 - Math.abs(dist - 12);
+      const far = !!(settl.farSail || settl.trait === "sail");
+      if (dist < (far ? 16 : 6) || dist > (far ? 56 : 18)) continue;
+      let wealth = 12 - Math.abs(dist - (far ? 28 : 12));
       for (let dy = -3; dy <= 3; dy++) {
         for (let dx = -3; dx <= 3; dx++) {
           const ni = idx(game, x + dx, y + dy);
@@ -3662,9 +4093,11 @@
       s.boatIn -= 1;
       if (s.boatIn > 0) return;
       s.boatIn = 22 + Math.floor(Math.random() * 16);
-      if (snakeSlotFull(game)) return;
+      if (s.farSail) s.boatIn = Math.max(12, s.boatIn - 8);
+      if (snakeSlotFull(game) && !(s.farSail && Math.random() < 0.55)) return;
       if (snakeBusy(game, s)) return;
       let chance = s.trait === "expand" ? 0.68 : s.trait === "dike" || s.trait === "sail" ? 0.48 : 0.3;
+      if (s.farSail) chance += 0.22;
       if (hasHeroTag(game, s.owner, "settle")) chance += 0.12;
       if (hasHeroTag(game, s.owner, "idle")) chance *= 0.5;
       if (Math.random() > chance) return;
@@ -3693,8 +4126,8 @@
 
   function tickFleets(game, isPlantable, events) {
     (game.settlements || []).forEach(function (s) {
-      if (!hasSail(game, s)) return;
-      if ((s.size || 0) < FLEET_TOWN) return;
+      if (!hasSail(game, s) && !s.farSail) return;
+      if ((s.size || 0) < (s.farSail && !hasSail(game, s) ? 14 : FLEET_TOWN)) return;
       if (!townTouchesSea(game, s)) return;
       if (townOnRaft(game, s)) return;
       if (fleetAtSea(game, s.owner || 0)) return;
@@ -3703,6 +4136,7 @@
       if (s.fleetIn > 0) return;
       s.fleetIn = 40 + Math.floor(Math.random() * 22);
       let chance = 0.42;
+      if (s.farSail) chance += 0.14;
       if (hasHeroTag(game, s.owner, "settle")) chance += 0.12;
       if (hasHeroTag(game, s.owner, "vanity")) chance += 0.1;
       if (hasHeroTag(game, s.owner, "idle")) chance *= 0.5;
@@ -3725,6 +4159,7 @@
       if (s.caravanIn > 0) return;
       s.caravanIn = 24 + Math.floor(Math.random() * 10);
       if (hasCraft(s, "wheel") || s.legacy === "market") s.caravanIn = Math.max(10, s.caravanIn - 8);
+      if (hasCraft(s, "copper") || s.legacy === "market") s.caravanIn = Math.max(8, s.caravanIn - 6);
       if (landSnakeBlocked(game, s)) return;
       if (snakeBusy(game, s)) return;
       if (spawnCaravan(game, s, isPlantable)) events.push("一支商隊出發");
@@ -3740,7 +4175,7 @@
     const keep = [];
     game.caravans.forEach(function (c) {
       c.age = (c.age || 0) + 1;
-      if (c.kind === "fleet" && c.age >= FLEET_MAX_AGE) {
+      if (c.kind === "fleet" && c.age >= (c.maxAge || FLEET_MAX_AGE)) {
         if (landFleet(game, c, isPlantable, true)) {
           events.push("船團登岸");
           return;
@@ -3797,6 +4232,10 @@
     return until != null && (game.generation || 0) < until;
   }
 
+  function tollTrustOf(game, a, b) {
+    return (game.tollTrust && game.tollTrust[tollPair(a, b)]) || 0;
+  }
+
   function tryCaravanToll(game, caravan, events) {
     if (!caravan || caravan.tolled) return;
     if (caravan.kind === "raid" || caravan.kind === "fleet" || caravan.kind === "boat") return;
@@ -3819,8 +4258,11 @@
     spendFood(game, who, gift);
     addFood(game, host.owner || 0, gift);
     caravan.tolled = 1;
+    const key = tollPair(who, host.owner || 0);
+    if (!game.tollTrust) game.tollTrust = {};
+    game.tollTrust[key] = (game.tollTrust[key] || 0) + 1;
     if (!game.tollPeace) game.tollPeace = {};
-    game.tollPeace[tollPair(who, host.owner || 0)] = (game.generation || 0) + 24;
+    game.tollPeace[key] = (game.generation || 0) + 24 + Math.min(40, (game.tollTrust[key] || 1) * 8);
     if (Math.random() < 0.6) events.push("過路留糧");
   }
 
@@ -3835,6 +4277,48 @@
       }
     }
     return best;
+  }
+
+  function snowFringeCell(game, x, y) {
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (let d = 0; d < dirs.length; d++) {
+      const t = game.terrain[idx(game, x + dirs[d][0], y + dirs[d][1])];
+      if (t === TERRAIN.HIGHLAND || t === TERRAIN.ROCK) return true;
+    }
+    return false;
+  }
+
+  function evacuateIceWalk(game, isPlantable) {
+    if (!game.iceWalkMask || !game.life) return 0;
+    let moved = 0;
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
+    const n = game.life.length;
+    for (let i = 0; i < n; i++) {
+      if (!game.life[i] || !game.iceWalkMask[i]) continue;
+      if (game.terrain[i] !== TERRAIN.ICE) continue;
+      const x = i % game.cols;
+      const y = (i - x) / game.cols;
+      let dest = null;
+      for (let d = 0; d < dirs.length; d++) {
+        const nx = W.wrap(x + dirs[d][0], game.cols);
+        const ny = y + dirs[d][1];
+        if (ny < 0 || ny >= game.rows) continue;
+        if (!isPlantable(game, nx, ny)) continue;
+        const ni = W.idx(nx, ny, game.cols);
+        if (game.terrain[ni] === TERRAIN.ICE) continue;
+        if (game.life[ni]) continue;
+        dest = ni;
+        break;
+      }
+      if (dest == null) continue;
+      const who = (game.owner && game.owner[i]) || 0;
+      game.life[i] = 0;
+      if (game.owner) game.owner[i] = 0;
+      game.life[dest] = 1;
+      if (game.owner) game.owner[dest] = who;
+      moved += 1;
+    }
+    return moved;
   }
 
   function heightScore(game, x, y) {
@@ -4210,7 +4694,7 @@
     Object.keys(game.factions || {}).forEach(function (key) {
       const o = Number(key);
       const f = game.factions[o];
-      if (!f || !f.alive || o === 0) return;
+      if (!f || !f.alive || !f.n) return;
       if (f.kingdom || f.empire) {
         if (Math.random() < 0.35) scrapeOwner(game, o, 0.08);
         return;
@@ -4314,6 +4798,7 @@
     traitLabel: traitLabel,
     disasterWait: disasterWait,
     foodOf: foodOf,
+    watchFood: watchFood,
     addFood: addFood,
     spendFood: spendFood,
     syncFood: syncFood,
@@ -4326,6 +4811,9 @@
     tickCaravans: tickCaravans,
     expandDikes: expandDikes,
     evacuateHighGround: evacuateHighGround,
+    evacuateIceWalk: evacuateIceWalk,
+    snowFringeCell: snowFringeCell,
+    flattenEvents: flattenEvents,
     tryWinterCrossings: tryWinterCrossings,
     markBoatCells: markBoatCells,
     tryHearthSpark: tryHearthSpark,

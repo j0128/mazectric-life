@@ -837,7 +837,7 @@
       if (resources[i] !== RESOURCE.CRYSTAL) continue;
       const x = i % cols;
       const y = (i - x) / cols;
-      if ((terrain[i] === TERRAIN.HIGHLAND || isRockAdjacent(terrain, x, y, cols, rows)) && Math.random() < 0.38) {
+      if ((terrain[i] === TERRAIN.HIGHLAND || isRockAdjacent(terrain, x, y, cols, rows)) && Math.random() < 0.52) {
         ore[i] = 1;
       }
     }
@@ -1913,7 +1913,9 @@
       const need = climb ? 70 : 80;
       if ((s.age || 0) < need && lived < need) return;
       let chance = 0.1;
-      if (climb) chance = 0.42;
+      if (s.craft === "iron") chance = 0.58;
+      else if (s.craft === "bronze") chance = 0.22;
+      else if (climb) chance = 0.42;
       else if (s.trait === "expand") chance = 0.18;
       if (Math.random() > chance) return;
       const cells = s.list || [];
@@ -2525,7 +2527,7 @@
       const kind = Math.random() < crystal ? RESOURCE.CRYSTAL : RESOURCE.NUTRIENT;
       game.resources[i] = kind;
       game.resAmt[i] = 1;
-      if (kind === RESOURCE.CRYSTAL && (t === TERRAIN.HIGHLAND || isRockAdjacent(game.terrain, x, y, cols, rows)) && Math.random() < 0.38) {
+      if (kind === RESOURCE.CRYSTAL && (t === TERRAIN.HIGHLAND || isRockAdjacent(game.terrain, x, y, cols, rows)) && Math.random() < 0.52) {
         game.ore[i] = 1;
       }
       current++;

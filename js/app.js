@@ -211,18 +211,21 @@
     factionListEl.innerHTML = list
       .map(function (f) {
         const skills = f.skills.length ? f.skills.join("、") : "尚未產生技能";
+        const place = (f.place && f.place.length) ? f.place.join("、") : "";
         const hero = f.hero ? "<div class=\"faction-hero\">" + f.hero + "</div>" : "";
         const rgb = factionRgb(f.owner);
         const deadKing = !f.alive && f.wasKingdom;
         const border = deadKing
           ? "border-color:#d4a017"
           : "border-left-color: rgb(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ")";
+        const dim = focusedOwner != null && focusedOwner !== f.owner ? " dimmed" : "";
         return (
           "<div class=\"faction-item " +
           (f.player ? "player" : "guest") +
           (f.alive ? "" : " dead") +
           (deadKing ? " was-kingdom" : "") +
           (focusedOwner === f.owner ? " focused" : "") +
+          dim +
           "\" data-owner=\"" +
           f.owner +
           "\" style=\"" +
@@ -233,7 +236,9 @@
           f.rank +
           "</span></div><div class=\"faction-skills\">" +
           skills +
-          "</div><div class=\"faction-food\">糧 " +
+          "</div>" +
+          (place ? "<div class=\"faction-place\">" + place + "</div>" : "") +
+          "<div class=\"faction-food\">糧 " +
           f.food +
           (f.alive && f.hungry ? " · 饑" : "") +
           (f.alive && f.plague ? " · 疫" : "") +
@@ -246,18 +251,19 @@
   }
 
   function isHeadlineEvent(text) {
-    return /火山|山沒裂|中冰期|酷熱|嚴寒|山脈|王國|帝國|滅亡|全部消失|學會了越山|學會了涉水|學會了林棲|岸將遷|岸線大退|岸線漸漸|湖沼|過路留糧|遠方出現|之主|因饑|散族|併入|諸部離散|海嘯|年候將亂|地要裂/.test(
+    return /火山|山沒裂|中冰期|酷熱|嚴寒|山脈|王國|帝國|滅亡|全部消失|學會了越山|學會了涉水|學會了林棲|學會了遠航|學會了冰行|學會了山居|岸將遷|岸線大退|岸線漸漸|湖沼|過路留糧|遠方出現|之主|因饑|散族|併入|諸部離散|海嘯|年候將亂|地要裂|青銅|學會了鐵|沿冰過海/.test(
       text || ""
     );
   }
 
-  function chronicleMentionsOwner(text, owner) {
+  function chronicleMentionsOwner(row, owner) {
+    const text = row && row.text;
     const f = game.factions && game.factions[owner];
     const n = f && f.n != null ? f.n : owner + 1;
     const name = window.LifeCiv.civName(n);
+    if (row && row.owner != null && row.owner === owner) return true;
     if (!text) return false;
     if (text.indexOf(name) >= 0) return true;
-    if (owner === 0 && /文明一/.test(text)) return true;
     return false;
   }
 
@@ -269,7 +275,7 @@
     let filtered = rows.slice();
     if (chronicleFollow && focusedOwner != null) {
       filtered = filtered.filter(function (row) {
-        return chronicleMentionsOwner(row.text, focusedOwner);
+        return chronicleMentionsOwner(row, focusedOwner);
       });
     }
     if (chronicleHeadlines) {
@@ -342,12 +348,18 @@
       if (town.alpine) place.push("越山");
       if (town.ford) place.push("涉水");
       if (town.groveWalk) place.push("林棲");
+      if (town.farSail) place.push("遠航");
+      if (town.iceWalk) place.push("冰行");
+      if (town.alpineLive) place.push("山居");
       if (place.length) parts.push(place.join("、"));
     } else {
       const aura = [];
       if (game.alpineMask && game.alpineMask[i]) aura.push("越山光環");
       if (game.fordMask && game.fordMask[i]) aura.push("涉水光環");
       if (game.groveMask && game.groveMask[i]) aura.push("林棲光環");
+      if (game.iceWalkMask && game.iceWalkMask[i]) aura.push("冰行光環");
+      if (game.dwellMask && game.dwellMask[i]) aura.push("山居光環");
+      if (game.ironMask && game.ironMask[i]) aura.push("鐵光環");
       if (aura.length) parts.push(aura.join("、"));
     }
     return parts.join(" · ");
@@ -375,7 +387,7 @@
     document.getElementById("stat-gen").textContent = String(game.generation);
     document.getElementById("stat-pop").textContent = String(engine.population(game));
     document.getElementById("stat-food").textContent = String(
-      window.LifeCiv.foodOf ? window.LifeCiv.foodOf(game, 0) : game.food || 0
+      window.LifeCiv.watchFood ? window.LifeCiv.watchFood(game, focusedOwner) : game.food || 0
     );
     document.getElementById("stat-energy").textContent = String(game.energy);
     document.getElementById("stat-climate").textContent =
@@ -431,8 +443,13 @@
       setStatus("方塊窖藏中：那 4 格不吃糧、不被餓死。");
     } else if (game.skills && game.skills.hardy) {
       setStatus("長廊耐旱中：這段巷道不受乾旱收緊。");
-    } else if (game.hungry) {
-      setStatus("文明一在挨餓，走廊正從外緣退縮。他族有自己的糧，不會被連坐。");
+    } else if (focusedOwner != null && window.LifeCiv.isHungry && window.LifeCiv.isHungry(game, focusedOwner)) {
+      setStatus(window.LifeCiv.civName((game.factions[focusedOwner] && game.factions[focusedOwner].n) || 0) + "在挨餓，走廊正從外緣退縮。他族有自己的糧，不會被連坐。");
+    } else if (game.factions && Object.keys(game.factions).some(function (key) {
+      const f = game.factions[key];
+      return f && f.alive && f.n && window.LifeCiv.isHungry && window.LifeCiv.isHungry(game, Number(key));
+    })) {
+      setStatus("有文明在挨餓，走廊正從外緣退縮。各族自己一袋糧，不會被連坐。");
     } else if (season.id === "drought") {
       setStatus("乾旱：內陸鄰居 4 也活不了；湖岸仍可續，岩邊可避旱。");
     } else if (season.id === "winter") {
@@ -828,6 +845,10 @@
       if (s.alpine) drawAuraCircle(L, size, s.cx, s.cy, radius, "rgba(176, 188, 208, 0.08)", "rgba(176, 188, 208, 0.16)");
       if (s.ford) drawAuraCircle(L, size, s.cx, s.cy, radius, "rgba(70, 150, 150, 0.08)", "rgba(90, 190, 180, 0.18)");
       if (s.groveWalk) drawAuraCircle(L, size, s.cx, s.cy, radius, "rgba(70, 140, 70, 0.08)", "rgba(90, 180, 90, 0.16)");
+      if (s.farSail) drawAuraCircle(L, size, s.cx, s.cy, radius, "rgba(70, 130, 170, 0.08)", "rgba(90, 170, 210, 0.18)");
+      if (s.iceWalk) drawAuraCircle(L, size, s.cx, s.cy, radius, "rgba(200, 220, 235, 0.1)", "rgba(210, 230, 245, 0.2)");
+      if (s.alpineLive) drawAuraCircle(L, size, s.cx, s.cy, radius, "rgba(150, 140, 120, 0.1)", "rgba(170, 155, 130, 0.2)");
+      if (s.craft === "iron") drawAuraCircle(L, size, s.cx, s.cy, radius, "rgba(140, 110, 90, 0.08)", "rgba(180, 140, 110, 0.18)");
     });
   }
 
@@ -835,7 +856,7 @@
     const f = game.factions && game.factions[owner];
     const n = f && f.n != null ? f.n : owner + 1;
     const full = window.LifeCiv.civName(n);
-    const short = n <= 1 ? "一" : full.replace(/^第/, "").replace(/文明$/, "");
+    const short = full.replace(/^第/, "").replace(/文明$/, "") || "?";
     return many ? short + seq : short;
   }
 
@@ -844,6 +865,7 @@
     const byOwner = {};
     (game.settlements || []).forEach(function (s) {
       const o = s.owner || 0;
+      if (!o) return;
       if (focusedOwner != null && o !== focusedOwner) return;
       if (!byOwner[o]) byOwner[o] = [];
       byOwner[o].push(s);
@@ -986,11 +1008,23 @@
           ctx.fill();
         } else if (res === RESOURCE.CRYSTAL) {
           ctx.save();
-          ctx.fillStyle = game.ore && game.ore[i] ? "#c8894a" : "#7ee8ff";
+          const isOre = game.ore && game.ore[i];
+          const followOre =
+            isOre &&
+            focusedOwner != null &&
+            game.factions &&
+            window.LifeCiv.ownerHasCraft &&
+            window.LifeCiv.ownerHasCraft(game, focusedOwner, "copper");
+          ctx.fillStyle = isOre ? (followOre ? "#efb56a" : "#d4924a") : "#7ee8ff";
           ctx.translate(px + size * 0.5, py + size * 0.5);
           ctx.rotate(Math.PI / 4);
-          const s = Math.max(3, size * (0.22 + amt * 0.1));
+          const s = Math.max(3, size * (0.22 + amt * 0.1 + (isOre ? 0.08 : 0) + (followOre ? 0.06 : 0)));
           ctx.fillRect(-s / 2, -s / 2, s, s);
+          if (isOre) {
+            ctx.strokeStyle = followOre ? "rgba(255, 230, 180, 0.9)" : "rgba(90, 50, 20, 0.55)";
+            ctx.lineWidth = Math.max(1, size * 0.08);
+            ctx.strokeRect(-s / 2, -s / 2, s, s);
+          }
           ctx.restore();
         }
         if (game.life[i]) {
@@ -1180,8 +1214,9 @@
       return;
     }
     if (result.seasonChanged) {
-      const ice = (result.events || []).indexOf("沿冰過河") >= 0;
-      showToast("進入" + result.seasonChanged.name + (ice ? " · 沿冰過河" : ""));
+      const iceSea = (result.events || []).indexOf("沿冰過海") >= 0;
+      const ice = iceSea || (result.events || []).indexOf("沿冰過河") >= 0;
+      showToast("進入" + result.seasonChanged.name + (iceSea ? " · 沿冰過海" : ice ? " · 沿冰過河" : ""));
     } else if (result.events && result.events.length) {
       showToast(result.events[0]);
     } else if (result.skills) {
