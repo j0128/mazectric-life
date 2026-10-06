@@ -1131,13 +1131,12 @@
     }
   }
 
-  function draw() {
-    const L = layout();
+  function renderScene(L) {
     ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = "#080a14";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    if (!game || L.size < 2) return;
+    if (!game || L.size < 2) return false;
 
     const size = L.size;
     const ruinMap = {};
@@ -1432,7 +1431,195 @@
       ctx.lineWidth = 1;
     }
 
+    collectGlints(L, size, x0, x1, y0, y1);
     postFx(L, size);
+    return true;
+  }
+
+  // ---- 場景快取＋動畫圖層 ----
+  const sceneCache = document.createElement("canvas");
+  let sceneDirty = true;
+  let sceneOk = false;
+  let glints = [];
+  const ANIM_KEY = "mazectric-anim";
+  let animOn = true;
+  try {
+    const pref = localStorage.getItem(ANIM_KEY);
+    if (pref != null) animOn = pref === "1";
+    else if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) animOn = false;
+  } catch (err) {}
+  const amb = { last: 0, motes: null, smoke: [], embers: [], acc: {} };
+
+  function collectGlints(L, size, x0, x1, y0, y1) {
+    glints = [];
+    if (size < 4) return;
+    const T = game.terrain;
+    for (let y = y0; y < y1 && glints.length < 1100; y++) {
+      for (let x = x0; x < x1; x++) {
+        if (T[world.idx(x, y, game.cols)] !== TERRAIN.WATER) continue;
+        const h = ((x * 131 + y * 71) % 8 + 8) % 8;
+        if (h) continue;
+        glints.push({ x: L.ox + (x + 0.5) * size, y: L.oy + (y + 0.5) * size, ph: (x * 0.7 + y * 1.3) % 6.28 });
+      }
+    }
+  }
+
+  function darkness(t) {
+    return 0.5 - 0.5 * Math.cos((t / 240) * Math.PI * 2);
+  }
+
+  function ambient(L, size) {
+    const now = performance.now() / 1000;
+    const dt = Math.min(0.1, amb.last ? now - amb.last : 0.04);
+    amb.last = now;
+    const vw = canvas.width / L.dpr;
+    const vh = canvas.height / L.dpr;
+    const mapW = size * game.cols;
+    const mapH = size * game.rows;
+    const night = Math.pow(darkness(now), 1.4);
+    ctx.save();
+    ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
+
+    // 雲影：緩緩飄過地圖
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(L.ox, L.oy, mapW, mapH);
+    ctx.clip();
+    for (let k = 0; k < 5; k++) {
+      const r = (110 + k * 37) * Math.max(1, Math.min(2, size / 5));
+      const span = mapW + r * 2;
+      const cx = L.ox - r + ((now * (5 + k * 1.7) + k * 211) % span);
+      const cy = L.oy + mapH * (0.12 + 0.19 * k) + Math.sin(now * 0.07 + k) * 20;
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, "rgba(10, 12, 44, 0.2)");
+      g.addColorStop(1, "rgba(10, 12, 44, 0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    }
+    ctx.restore();
+
+    // 日夜：慢慢暗下來，鎮上燈火轉亮
+    if (night > 0.02) {
+      ctx.fillStyle = "rgba(12, 14, 70, " + (night * 0.34).toFixed(3) + ")";
+      ctx.fillRect(0, 0, vw, vh);
+    } else {
+      ctx.fillStyle = "rgba(255, 190, 110, 0.035)";
+      ctx.fillRect(0, 0, vw, vh);
+    }
+
+    ctx.globalCompositeOperation = "lighter";
+
+    // 水面閃光
+    for (let i = 0; i < glints.length; i++) {
+      const gl = glints[i];
+      const v = Math.sin(now * 1.6 + gl.ph);
+      if (v < 0.82) continue;
+      const a = (v - 0.82) / 0.18;
+      ctx.fillStyle = "rgba(200, 235, 255, " + (a * 0.55).toFixed(2) + ")";
+      const w = Math.max(2, size * 0.5);
+      ctx.fillRect(gl.x - w / 2, gl.y, w, Math.max(1, size * 0.14));
+    }
+
+    // 鎮：燈火、炊煙、火星
+    const towns = size >= 4 ? game.settlements || [] : [];
+    for (let i = 0; i < towns.length; i++) {
+      const s = towns[i];
+      if (!s.owner) continue;
+      const px = L.ox + (s.cx + 0.5) * size;
+      const py = L.oy + (s.cy + 0.5) * size;
+      if (px < -60 || py < -60 || px > vw + 60 || py > vh + 60) continue;
+      const flick = 1 + 0.16 * Math.sin(now * 9 + (s.id || i) * 1.7) + 0.08 * Math.sin(now * 23 + i);
+      const rad = size * (2.4 + night * 2.2);
+      const g = ctx.createRadialGradient(px, py, 0, px, py, rad);
+      const a = (0.1 + night * 0.34) * flick;
+      g.addColorStop(0, "rgba(255, 176, 84, " + a.toFixed(3) + ")");
+      g.addColorStop(1, "rgba(255, 140, 60, 0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(px - rad, py - rad, rad * 2, rad * 2);
+      const key = "t" + i;
+      amb.acc[key] = (amb.acc[key] || 0) + dt;
+      if (amb.acc[key] > 0.9 && amb.smoke.length < 90) {
+        amb.acc[key] = 0;
+        amb.smoke.push({ x: px + (Math.random() - 0.5) * size, y: py - size * 0.4, vx: 3 + Math.random() * 4, vy: -(6 + Math.random() * 5), age: 0, max: 3.4 + Math.random() * 1.6, r: size * 0.35 });
+      }
+      if (Math.random() < dt * 1.6 && amb.embers.length < 70) {
+        amb.embers.push({ x: px + (Math.random() - 0.5) * size * 1.4, y: py, vx: (Math.random() - 0.5) * 8, vy: -(10 + Math.random() * 14), age: 0, max: 1.6 + Math.random() * 1.4 });
+      }
+    }
+    ctx.globalCompositeOperation = "source-over";
+    amb.smoke = amb.smoke.filter(function (p) {
+      p.age += dt;
+      if (p.age >= p.max) return false;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.r += size * 0.12 * dt;
+      const f = p.age / p.max;
+      ctx.fillStyle = "rgba(205, 198, 215, " + (0.2 * (1 - f) * (f < 0.15 ? f / 0.15 : 1)).toFixed(3) + ")";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    });
+    ctx.globalCompositeOperation = "lighter";
+    amb.embers = amb.embers.filter(function (p) {
+      p.age += dt;
+      if (p.age >= p.max) return false;
+      p.x += (p.vx + Math.sin(p.age * 6) * 5) * dt;
+      p.y += p.vy * dt;
+      const f = 1 - p.age / p.max;
+      ctx.fillStyle = "rgba(255, " + (120 + 90 * f | 0) + ", 60, " + (0.85 * f).toFixed(2) + ")";
+      ctx.fillRect(p.x, p.y, 1.6, 1.6);
+      return true;
+    });
+
+    // 漂浮光塵（花粉／螢火）
+    if (!amb.motes) {
+      amb.motes = [];
+      for (let i = 0; i < 46; i++) {
+        amb.motes.push({ u: Math.random(), v: Math.random(), sp: 0.004 + Math.random() * 0.01, ph: Math.random() * 6.28, r: 0.8 + Math.random() * 1.6 });
+      }
+    }
+    for (let i = 0; i < amb.motes.length; i++) {
+      const m = amb.motes[i];
+      m.u = (m.u + m.sp * dt * 0.6 + 1) % 1;
+      m.v = m.v - m.sp * dt * 0.35;
+      if (m.v < 0) m.v += 1;
+      const x = m.u * vw + Math.sin(now * 0.6 + m.ph) * 14;
+      const y = m.v * vh + Math.cos(now * 0.5 + m.ph) * 9;
+      const tw = 0.5 + 0.5 * Math.sin(now * 2 + m.ph * 3);
+      const a = (0.12 + 0.5 * tw) * (0.5 + night * 0.9);
+      ctx.fillStyle = "rgba(255, 238, 160, " + a.toFixed(2) + ")";
+      ctx.beginPath();
+      ctx.arc(x, y, m.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function frame() {
+    const L = layout();
+    if (
+      sceneDirty ||
+      !sceneOk ||
+      sceneCache.width !== canvas.width ||
+      sceneCache.height !== canvas.height
+    ) {
+      sceneOk = renderScene(L);
+      sceneDirty = false;
+      if (sceneOk) {
+        sceneCache.width = canvas.width;
+        sceneCache.height = canvas.height;
+        sceneCache.getContext("2d").drawImage(canvas, 0, 0);
+      }
+    } else {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(sceneCache, 0, 0);
+      ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
+    }
+    if (!game || !sceneOk) return;
+    const size = L.size;
+    if (animOn) ambient(L, size);
     drawPlaceAuras(L, size);
     drawTownLabels(L, size);
 
@@ -1450,6 +1637,25 @@
       ctx.strokeRect(L.ox + hover.x * size + 0.5, L.oy + hover.y * size + 0.5, size - 1, size - 1);
     }
   }
+
+  function draw() {
+    sceneDirty = true;
+    frame();
+  }
+
+  let animGap = 50;
+  let animLast = 0;
+  function animLoop(ts) {
+    requestAnimationFrame(animLoop);
+    if (!animOn || !game || loading || document.hidden || !sceneOk) return;
+    if (ts - animLast < animGap) return;
+    animLast = ts;
+    const t0 = performance.now();
+    frame();
+    const cost = performance.now() - t0;
+    animGap = Math.max(42, Math.min(250, animGap * 0.8 + cost * 1.6 * 0.2));
+  }
+  requestAnimationFrame(animLoop);
 
   let lastSkillToast = "";
 
@@ -1596,7 +1802,7 @@
     if (painting || erasing) paintAt(cell, erasing);
     else {
       if (cell && !stampCells) applyInspect(cell.x, cell.y);
-      draw();
+      frame();
     }
   });
 
@@ -1613,7 +1819,7 @@
     erasing = false;
     panning = false;
     canvas.style.cursor = "crosshair";
-    draw();
+    frame();
   });
 
   if (factionListEl) {
@@ -1733,6 +1939,24 @@
     sizeCancel.addEventListener("click", function () {
       const overlay = document.getElementById("size-overlay");
       if (overlay && game) overlay.classList.add("hidden");
+    });
+  }
+
+  const btnAnim = document.getElementById("btn-anim");
+  function syncAnimBtn() {
+    if (!btnAnim) return;
+    btnAnim.setAttribute("aria-pressed", animOn ? "true" : "false");
+    btnAnim.classList.toggle("on", animOn);
+  }
+  if (btnAnim) {
+    syncAnimBtn();
+    btnAnim.addEventListener("click", function () {
+      animOn = !animOn;
+      try {
+        localStorage.setItem(ANIM_KEY, animOn ? "1" : "0");
+      } catch (err) {}
+      syncAnimBtn();
+      frame();
     });
   }
 

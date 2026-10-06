@@ -1054,6 +1054,11 @@ button, input {
   letter-spacing: 0.14em;
 }
 
+#btn-anim.on {
+  border-color: var(--gold-dim);
+  color: var(--gold-hi);
+}
+
 @media (max-width: 900px) {
   .title-block h1 { font-size: 20px; }
 }
