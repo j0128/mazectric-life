@@ -410,6 +410,21 @@ button, input {
   cursor: pointer;
 }
 
+.size-resume {
+  margin-top: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--dim);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.size-resume.hidden {
+  display: none;
+}
+
 .size-cancel.hidden {
   display: none;
 }

@@ -49,7 +49,7 @@
   ];
 
   function randInt(n) {
-    return Math.floor(Math.random() * n);
+    return Math.floor(LifeRNG.random() * n);
   }
 
   function idx(x, y, cols) {
@@ -133,11 +133,11 @@
     let y = randInt(rows);
     for (let i = 0; i < steps; i++) {
       terrain[idx(x, y, cols)] = type;
-      if (Math.random() < 0.35) {
+      if (LifeRNG.random() < 0.35) {
         const nx = wrap(x + 1, cols);
         terrain[idx(nx, y, cols)] = type;
       }
-      if (Math.random() < 0.35) {
+      if (LifeRNG.random() < 0.35) {
         const ny = wrap(y + 1, rows);
         terrain[idx(x, ny, cols)] = type;
       }
@@ -160,7 +160,7 @@
       const i = idx(x, y, cols);
       if (resources[i]) continue;
       if (!canHoldResource(terrain, life, i)) continue;
-      if (preferFertile && terrain[i] !== TERRAIN.FERTILE && terrain[i] !== TERRAIN.MARSH && terrain[i] !== TERRAIN.GROVE && Math.random() < 0.65) continue;
+      if (preferFertile && terrain[i] !== TERRAIN.FERTILE && terrain[i] !== TERRAIN.MARSH && terrain[i] !== TERRAIN.GROVE && LifeRNG.random() < 0.65) continue;
       resources[i] = kind;
       if (resAmt) resAmt[i] = 1;
       return true;
@@ -179,7 +179,7 @@
   }
 
   function paintRiver(terrain, cols, rows) {
-    const vertical = Math.random() < 0.55;
+    const vertical = LifeRNG.random() < 0.55;
     let x = vertical ? 10 + randInt(Math.max(1, cols - 20)) : 0;
     let y = vertical ? 0 : 6 + randInt(Math.max(1, rows - 12));
     const targetX = vertical ? clamp(x + randInt(21) - 10, 0, cols - 1) : cols - 1;
@@ -192,7 +192,7 @@
       } else if (terrain[i] === TERRAIN.WATER) {
         terrain[i] = TERRAIN.WATER;
       }
-      if (Math.random() < 0.5) {
+      if (LifeRNG.random() < 0.5) {
         const wx = clamp(x + (vertical ? 1 : 0), 0, cols - 1);
         const wy = clamp(y + (vertical ? 0 : 1), 0, rows - 1);
         const ni = idx(wx, wy, cols);
@@ -218,7 +218,7 @@
       { dx: 0, dy: 1, label: "向南", back: "向北" },
       { dx: 0, dy: -1, label: "向北", back: "向南" },
     ];
-    if (Math.random() < 0.7) return bag[Math.random() < 0.5 ? 0 : 1];
+    if (LifeRNG.random() < 0.7) return bag[LifeRNG.random() < 0.5 ? 0 : 1];
     return bag[2 + randInt(2)];
   }
 
@@ -242,7 +242,7 @@
 
   function turnMonsoon90(m) {
     if (!m) return null;
-    if (Math.random() < 0.5) return monsoonFromDir(-m.dy, m.dx);
+    if (LifeRNG.random() < 0.5) return monsoonFromDir(-m.dy, m.dx);
     return monsoonFromDir(m.dy, -m.dx);
   }
 
@@ -578,7 +578,7 @@
 
   function buildCurrents(terrain, height, sea, cols, rows) {
     const current = new Uint8Array(cols * rows);
-    const cw = Math.random() < 0.72 ? 1 : -1;
+    const cw = LifeRNG.random() < 0.72 ? 1 : -1;
     const dirs = [
       [1, 0],
       [-1, 0],
@@ -649,7 +649,7 @@
         const t0 = terrain[i];
         if (t0 === TERRAIN.WATER || t0 === TERRAIN.RIVER || t0 === TERRAIN.SNOW) continue;
         if (isOrographic(t0)) {
-          if (t0 === TERRAIN.HIGHLAND && Math.random() < 0.16) terrain[i] = TERRAIN.ROCK;
+          if (t0 === TERRAIN.HIGHLAND && LifeRNG.random() < 0.16) terrain[i] = TERRAIN.ROCK;
           continue;
         }
         let down = 0;
@@ -837,7 +837,7 @@
       if (resources[i] !== RESOURCE.CRYSTAL) continue;
       const x = i % cols;
       const y = (i - x) / cols;
-      if ((terrain[i] === TERRAIN.HIGHLAND || isRockAdjacent(terrain, x, y, cols, rows)) && Math.random() < 0.52) {
+      if ((terrain[i] === TERRAIN.HIGHLAND || isRockAdjacent(terrain, x, y, cols, rows)) && LifeRNG.random() < 0.52) {
         ore[i] = 1;
       }
     }
@@ -869,7 +869,7 @@
     const want = Math.min(roll, max - current);
     let added = 0;
     for (let i = 0; i < want; i++) {
-      const rare = Math.random() < 0.18;
+      const rare = LifeRNG.random() < 0.18;
       const kind = rare ? RESOURCE.CRYSTAL : RESOURCE.NUTRIENT;
       if (placeResource(game.terrain, game.resources, life, cols, rows, kind, true, game.resAmt)) {
         added++;
@@ -883,7 +883,7 @@
     const rows = game.rows;
     const life = game.life;
     (game.settlements || []).forEach(function (s) {
-      const tries = 1 + (Math.random() < 0.45 ? 1 : 0);
+      const tries = 1 + (LifeRNG.random() < 0.45 ? 1 : 0);
       for (let t = 0; t < tries; t++) {
         const x = wrap(Math.round(s.cx) + randInt(9) - 4, cols);
         let y = Math.round(s.cy) + randInt(9) - 4;
@@ -891,7 +891,7 @@
         const i = idx(x, y, cols);
         if (game.resources[i]) continue;
         if (!canHoldResource(game.terrain, life, i)) continue;
-        game.resources[i] = Math.random() < 0.45 ? RESOURCE.CRYSTAL : RESOURCE.NUTRIENT;
+        game.resources[i] = LifeRNG.random() < 0.45 ? RESOURCE.CRYSTAL : RESOURCE.NUTRIENT;
         if (game.resAmt) game.resAmt[i] = 1;
       }
     });
@@ -902,7 +902,7 @@
       if (game.civCells && game.civCells[i]) continue;
       if (game.resources[i]) continue;
       if (!canHoldResource(game.terrain, life, i)) continue;
-      if (Math.random() < 0.1) {
+      if (LifeRNG.random() < 0.1) {
         game.resources[i] = RESOURCE.NUTRIENT;
         if (game.resAmt) game.resAmt[i] = 1;
         extra += 1;
@@ -959,7 +959,7 @@
             const ni = idx(p.x, p.y, cols);
             const t = game.baseTerrain[ni];
             if (!floodable[t]) continue;
-            if (dry && Math.random() > 0.35) continue;
+            if (dry && LifeRNG.random() > 0.35) continue;
             pushExtra(ni);
           }
         }
@@ -997,7 +997,7 @@
       if (game.terrain[i] !== TERRAIN.WATER && game.terrain[i] !== TERRAIN.RIVER) continue;
       if (game.dikeCells && game.dikeCells[i] && game.terrain[i] === TERRAIN.WATER) continue;
       if (game.raftCells && game.raftCells[i]) {
-        if (Math.random() < 0.7) continue;
+        if (LifeRNG.random() < 0.7) continue;
         delete game.raftCells[i];
         if (game.raftIdle) delete game.raftIdle[i];
       }
@@ -1120,7 +1120,7 @@
       if (game.baseTerrain[i] === TERRAIN.WATER) return;
       if (game.baseTerrain[i] !== TERRAIN.SOIL && game.baseTerrain[i] !== TERRAIN.FERTILE) return;
       if (game.life && game.life[i]) return;
-      if (Math.random() < 0.32) {
+      if (LifeRNG.random() < 0.32) {
         if (writeLand(game, i, TERRAIN.FERTILE)) silt++;
       }
     });
@@ -1365,9 +1365,9 @@
     const made = [];
     cells.forEach(function (i, n) {
       let type = TERRAIN.SOIL;
-      if (n === 0 || n < 2) type = Math.random() < 0.6 ? TERRAIN.ROCK : TERRAIN.HIGHLAND;
+      if (n === 0 || n < 2) type = LifeRNG.random() < 0.6 ? TERRAIN.ROCK : TERRAIN.HIGHLAND;
       else if (n < 4) type = TERRAIN.HIGHLAND;
-      if (north && n === 0 && Math.random() < 0.35) type = TERRAIN.SNOW;
+      if (north && n === 0 && LifeRNG.random() < 0.35) type = TERRAIN.SNOW;
       if (!writeFromOcean(game, i, type)) return;
       ensureHeight(game, i, sea + 8);
       made.push(i);
@@ -1383,7 +1383,7 @@
       game.resources[crystal] = RESOURCE.CRYSTAL;
       if (game.resAmt) game.resAmt[crystal] = 2;
     }
-    return Math.random() < 0.5 ? "海底冒出一座島" : "火山在海上噴出新陸";
+    return LifeRNG.random() < 0.5 ? "海底冒出一座島" : "火山在海上噴出新陸";
   }
 
   function townDist(game, x, y, settl) {
@@ -1442,7 +1442,7 @@
       if (!writeLand(game, ni, TERRAIN.RIVER)) continue;
       const mountain = isMountainRiver(game, i) || isMountainRiver(game, ni);
       const town = nearestTown(game, x, y, 8);
-      const fill = town && Math.random() < 0.45 ? TERRAIN.FERTILE : TERRAIN.SOIL;
+      const fill = town && LifeRNG.random() < 0.45 ? TERRAIN.FERTILE : TERRAIN.SOIL;
       writeLand(game, i, fill);
       reconnectAround(game, ni);
       reconnectAround(game, i);
@@ -1602,18 +1602,18 @@
     if (!cands.length) return null;
     let chance = 0.18;
     if (s.trait === "dike") chance = 0.32;
-    if (Math.random() > chance) return null;
+    if (LifeRNG.random() > chance) return null;
     cands.sort(function (a, b) {
       return riverOrthoCount(game.baseTerrain, cols, rows, b) - riverOrthoCount(game.baseTerrain, cols, rows, a);
     });
-    const nFill = cands.length > 1 && Math.random() < 0.55 ? 2 : 1;
+    const nFill = cands.length > 1 && LifeRNG.random() < 0.55 ? 2 : 1;
     let filled = 0;
     const scars = [];
     for (let f = 0; f < nFill && f < cands.length; f++) {
       const i = cands[f];
       if (game.baseTerrain[i] !== TERRAIN.RIVER) continue;
       if (touchesWater(game.baseTerrain, cols, rows, i)) continue;
-      const next = s.trait === "dike" || Math.random() < 0.55 ? TERRAIN.SOIL : TERRAIN.MARSH;
+      const next = s.trait === "dike" || LifeRNG.random() < 0.55 ? TERRAIN.SOIL : TERRAIN.MARSH;
       if (!writeLand(game, i, next)) continue;
       filled++;
       scars.push(i);
@@ -1637,7 +1637,7 @@
     if (game.yearKind === "dry") return null;
     if (!extra || !extra.length) return null;
     const chance = game.yearKind === "wet" ? 0.22 : 0.08;
-    if (Math.random() > chance) return null;
+    if (LifeRNG.random() > chance) return null;
     const cols = game.cols;
     const rows = game.rows;
     const height = game.height;
@@ -1735,7 +1735,7 @@
       if (f && (f.kingdom || f.empire)) chance += 0.1;
       if (game.hungry) chance += 0.14;
       if ((s.size || 0) >= 20) chance += 0.08;
-      if (Math.random() > chance) continue;
+      if (LifeRNG.random() > chance) continue;
       let picked = -1;
       for (let attempt = 0; attempt < 24; attempt++) {
         const x = wrap(Math.round(s.cx) + randInt(11) - 5, cols);
@@ -1766,10 +1766,10 @@
         const p = nbr(px, py, dirs[d][0], dirs[d][1], cols, rows);
         if (!p) continue;
         const ni = idx(p.x, p.y, cols);
-        if (game.baseTerrain[ni] === TERRAIN.SOIL && Math.random() < 0.5) {
+        if (game.baseTerrain[ni] === TERRAIN.SOIL && LifeRNG.random() < 0.5) {
           writeLand(game, ni, TERRAIN.FERTILE);
         }
-        if (game.baseTerrain[ni] === TERRAIN.MARSH && Math.random() < 0.35) {
+        if (game.baseTerrain[ni] === TERRAIN.MARSH && LifeRNG.random() < 0.35) {
           writeLand(game, ni, TERRAIN.SOIL);
         }
       }
@@ -1803,7 +1803,7 @@
       }
     }
     if (!cands.length) return null;
-    const cap = 1 + (Math.random() < 0.35 ? 1 : 0);
+    const cap = 1 + (LifeRNG.random() < 0.35 ? 1 : 0);
     let n = 0;
     const used = {};
     for (let t = 0; t < cands.length && n < cap; t++) {
@@ -1815,7 +1815,7 @@
       const town = nearestTown(game, x, y, 8);
       let chance = 0.12;
       if (town && (town.trait === "dike" || town.trait === "expand")) chance = 0.22;
-      if (Math.random() >= chance) continue;
+      if (LifeRNG.random() >= chance) continue;
       if (!writeFromOcean(game, ni, TERRAIN.MARSH)) continue;
       n++;
     }
@@ -1877,7 +1877,7 @@
         if (!writeLand(game, item.i, TERRAIN.HIGHLAND)) continue;
         rock = true;
       } else if (cellT === TERRAIN.HIGHLAND) {
-        const next = Math.random() < 0.55 ? TERRAIN.SOIL : TERRAIN.FERTILE;
+        const next = LifeRNG.random() < 0.55 ? TERRAIN.SOIL : TERRAIN.FERTILE;
         if (!writeLand(game, item.i, next)) continue;
       } else continue;
       usedTown[key] = 1;
@@ -1917,7 +1917,7 @@
       else if (s.craft === "bronze") chance = 0.22;
       else if (climb) chance = 0.42;
       else if (s.trait === "expand") chance = 0.18;
-      if (Math.random() > chance) return;
+      if (LifeRNG.random() > chance) return;
       const cells = s.list || [];
       for (let k = 0; k < cells.length; k++) {
         const i = cells[k];
@@ -2022,7 +2022,7 @@
   function shiftMonsoonRain(game) {
     if (!game.monsoon) return null;
     if (!game.monsoonBase) game.monsoonBase = cloneMonsoon(game.monsoon);
-    if (Math.random() > 0.34) {
+    if (LifeRNG.random() > 0.34) {
       game.monsoon = cloneMonsoon(game.monsoonBase);
       game.monsoonShifted = false;
       return null;
@@ -2194,7 +2194,7 @@
     let chance = 0.14;
     if (s.trait === "dike" || s.trait === "expand") chance = 0.26;
     if (game.yearKind === "dry") chance += 0.08;
-    if (Math.random() > chance) return null;
+    if (LifeRNG.random() > chance) return null;
     const i = cands[randInt(cands.length)];
     if (!writeFromOcean(game, i, TERRAIN.MARSH)) return null;
     return "有人填了一小塊海";
@@ -2220,7 +2220,7 @@
         if (!p) continue;
         const ni = idx(p.x, p.y, cols);
         if (game.stain && game.stain[ni] >= 8) continue;
-        if (game.life && game.life[ni] && Math.random() < 0.7) continue;
+        if (game.life && game.life[ni] && LifeRNG.random() < 0.7) continue;
         const t = game.baseTerrain[ni];
         if (t === TERRAIN.SAND) {
           if (isDesertCore(game, ni)) continue;
@@ -2251,7 +2251,7 @@
         const ck = coastCurrentKind(game.current, game.baseTerrain, x, y, cols, rows);
         const shadow = rainShadowDist(game.baseTerrain, game.height, game.monsoon, x, y, cols, rows);
         if (game.yearKind === "dry" || ck === CURRENT.COLD || shadow) return true;
-        return Math.random() < 0.45;
+        return LifeRNG.random() < 0.45;
       }, 40);
       if (i < 0) continue;
       const x = i % cols;
@@ -2269,11 +2269,11 @@
         const ni = idx(p.x, p.y, cols);
         if (game.stain && game.stain[ni] >= 8) continue;
         if (game.civCells && game.civCells[ni]) continue;
-        if (game.life && game.life[ni] && Math.random() < 0.75) continue;
+        if (game.life && game.life[ni] && LifeRNG.random() < 0.75) continue;
         const t = game.baseTerrain[ni];
         if (t !== TERRAIN.GROVE && t !== TERRAIN.SOIL && t !== TERRAIN.FERTILE) continue;
         const ck = coastCurrentKind(game.current, game.baseTerrain, p.x, p.y, cols, rows);
-        if (ck === CURRENT.WARM && Math.random() < 0.7) continue;
+        if (ck === CURRENT.WARM && LifeRNG.random() < 0.7) continue;
         if (writeLand(game, ni, TERRAIN.SAND)) n++;
         break;
       }
@@ -2290,14 +2290,14 @@
         if (game.baseTerrain[j] !== TERRAIN.SAND) return false;
         if (game.stain && game.stain[j] >= 8) return false;
         if (game.civCells && game.civCells[j]) return false;
-        if (game.life && game.life[j] && Math.random() < 0.65) return false;
+        if (game.life && game.life[j] && LifeRNG.random() < 0.65) return false;
         if (isDesertCore(game, j)) return false;
         const x = j % cols;
         const y = (j - x) / cols;
         const ck = coastCurrentKind(game.current, game.baseTerrain, x, y, cols, rows);
         if (ck === CURRENT.COLD) return false;
         const shadow = rainShadowDist(game.baseTerrain, game.height, game.monsoon, x, y, cols, rows);
-        if (shadow && ck !== CURRENT.WARM && Math.random() < 0.65) return false;
+        if (shadow && ck !== CURRENT.WARM && LifeRNG.random() < 0.65) return false;
         return true;
       }, 45);
       if (i < 0) continue;
@@ -2324,7 +2324,7 @@
       for (let k = 0; k < count; k++) {
         const i = sampleCell(game, function (j) {
           if (base[j] !== TERRAIN.SOIL) return false;
-          if (game.life && game.life[j] && Math.random() < 0.7) return false;
+          if (game.life && game.life[j] && LifeRNG.random() < 0.7) return false;
           const p = xy(j);
           return nearWet(vis, p.x, p.y, cols, rows) || nearWet(base, p.x, p.y, cols, rows);
         }, 35);
@@ -2341,7 +2341,7 @@
           if (base[j] !== TERRAIN.FERTILE) return false;
           const p = xy(j);
           if (protectShore && nearSea(base, p.x, p.y, cols, rows)) return false;
-          if (!protectShore && nearWet(base, p.x, p.y, cols, rows) && Math.random() < 0.7) return false;
+          if (!protectShore && nearWet(base, p.x, p.y, cols, rows) && LifeRNG.random() < 0.7) return false;
           return true;
         }, 40);
         if (i < 0) continue;
@@ -2367,7 +2367,7 @@
     const areaMul = (cols * rows) / (200 * 120);
     if (seasonId === "rain") {
       if (tryEnrich(3 + randInt(3)) > 2) notes.push("雨水讓岸邊變肥");
-      tryWeather(Math.random() < 0.45 ? 1 : 0);
+      tryWeather(LifeRNG.random() < 0.45 ? 1 : 0);
       const groves = spreadGrove(game, 2 + randInt(3) + (game.yearKind === "wet" ? 1 : 0));
       if (groves > 1) notes.push("林往前長");
       let shrinkN = 5 + randInt(6) + (game.yearKind === "wet" ? 5 : 0) - (game.yearKind === "dry" ? 2 : 0);
@@ -2428,7 +2428,7 @@
         return !!(civ[j] && base[j] === TERRAIN.SOIL);
       }, 20);
       if (i < 0) break;
-      if (Math.random() < 0.35) writeLand(game, i, TERRAIN.FERTILE);
+      if (LifeRNG.random() < 0.35) writeLand(game, i, TERRAIN.FERTILE);
     }
     if (game.hungry) {
       for (let k = 0; k < 6; k++) {
@@ -2436,7 +2436,7 @@
           return !!(game.life[j] && base[j] === TERRAIN.FERTILE);
         }, 25);
         if (i < 0) break;
-        if (Math.random() < 0.4) writeLand(game, i, TERRAIN.SOIL);
+        if (LifeRNG.random() < 0.4) writeLand(game, i, TERRAIN.SOIL);
       }
     }
 
@@ -2480,21 +2480,21 @@
         wipeRes(game, i);
         continue;
       }
-      if (game.glacialLeft && game.resources[i] === RESOURCE.CRYSTAL && Math.random() < 0.08) {
+      if (game.glacialLeft && game.resources[i] === RESOURCE.CRYSTAL && LifeRNG.random() < 0.08) {
         if (game.resAmt[i] > 1) game.resAmt[i] -= 1;
         else wipeRes(game, i);
         continue;
       }
       if (seasonId === "drought") {
-        if (Math.random() < (near || stain ? 0.55 : 0.28)) {
+        if (LifeRNG.random() < (near || stain ? 0.55 : 0.28)) {
           if (game.resAmt[i] > 1) game.resAmt[i] -= 1;
           else wipeRes(game, i);
         }
       } else if (seasonId === "winter") {
-        if (game.resAmt[i] > 1 && Math.random() < 0.1) game.resAmt[i] -= 1;
+        if (game.resAmt[i] > 1 && LifeRNG.random() < 0.1) game.resAmt[i] -= 1;
       } else if (!near && !stain && game.resAmt[i] < 3) {
         const grow = seasonId === "rain" ? 0.42 : 0.16;
-        if (Math.random() < grow) game.resAmt[i] += 1;
+        if (LifeRNG.random() < grow) game.resAmt[i] += 1;
       }
     }
     if (seasonId === "winter" || seasonId === "drought" || seasonId === "flood") return;
@@ -2523,11 +2523,11 @@
         p *= 0.45;
         crystal *= 0.4;
       }
-      if (Math.random() > p) continue;
-      const kind = Math.random() < crystal ? RESOURCE.CRYSTAL : RESOURCE.NUTRIENT;
+      if (LifeRNG.random() > p) continue;
+      const kind = LifeRNG.random() < crystal ? RESOURCE.CRYSTAL : RESOURCE.NUTRIENT;
       game.resources[i] = kind;
       game.resAmt[i] = 1;
-      if (kind === RESOURCE.CRYSTAL && (t === TERRAIN.HIGHLAND || isRockAdjacent(game.terrain, x, y, cols, rows)) && Math.random() < 0.52) {
+      if (kind === RESOURCE.CRYSTAL && (t === TERRAIN.HIGHLAND || isRockAdjacent(game.terrain, x, y, cols, rows)) && LifeRNG.random() < 0.52) {
         game.ore[i] = 1;
       }
       current++;
@@ -2561,11 +2561,11 @@
     for (let i = 0; i < game.baseTerrain.length; i++) {
       const t = game.baseTerrain[i];
       if (t === TERRAIN.WATER || t === TERRAIN.SNOW) continue;
-      if (hits.length > 220 && Math.random() > 0.2) continue;
+      if (hits.length > 220 && LifeRNG.random() > 0.2) continue;
       hits.push(i);
     }
     if (!hits.length) return -1;
-    return hits[Math.floor(Math.random() * hits.length)];
+    return hits[Math.floor(LifeRNG.random() * hits.length)];
   }
 
   function coastTsunami(game) {
@@ -2598,7 +2598,7 @@
   }
 
   function nextVolcanoAt(game) {
-    return (game.generation || 0) + 1800 + Math.floor(Math.random() * 401);
+    return (game.generation || 0) + 1800 + Math.floor(LifeRNG.random() * 401);
   }
 
   function volcanoChance(game) {
@@ -2614,7 +2614,7 @@
     const ox = at % cols;
     const oy = (at - ox) / cols;
     const scale = Math.sqrt((cols * game.rows) / (200 * 120));
-    const r = Math.round((18 + Math.floor(Math.random() * 11)) * Math.max(0.9, Math.min(1.4, scale)) * mul);
+    const r = Math.round((18 + Math.floor(LifeRNG.random() * 11)) * Math.max(0.9, Math.min(1.4, scale)) * mul);
     const r2 = r * r;
     const sea = game.seaLevel == null ? 100 : game.seaLevel;
     const midKill = Math.min(0.92, 0.62 + level * 0.08);
@@ -2629,13 +2629,13 @@
       if (d2 > r2) continue;
       const d = Math.sqrt(d2);
       if (d <= r * 0.28) {
-        forceTerrain(game, i, y / Math.max(1, game.rows - 1) < 0.28 && Math.random() < 0.35 ? TERRAIN.SNOW : TERRAIN.ROCK, sea + 22);
+        forceTerrain(game, i, y / Math.max(1, game.rows - 1) < 0.28 && LifeRNG.random() < 0.35 ? TERRAIN.SNOW : TERRAIN.ROCK, sea + 22);
         game.caldera[i] = 1;
         if (game.life) game.life[i] = 0;
         if (game.owner) game.owner[i] = 0;
       } else if (d <= r * 0.55) {
         const north = y / Math.max(1, game.rows - 1) < 0.3;
-        forceTerrain(game, i, north && Math.random() < 0.22 ? TERRAIN.SNOW : TERRAIN.HIGHLAND, sea + 14);
+        forceTerrain(game, i, north && LifeRNG.random() < 0.22 ? TERRAIN.SNOW : TERRAIN.HIGHLAND, sea + 14);
         game.caldera[i] = 2;
         if (game.life) {
           game.life[i] = 0;
@@ -2647,11 +2647,11 @@
           forceTerrain(game, i, TERRAIN.SAND, 0);
           game.caldera[i] = 3;
         }
-        if (game.life && game.life[i] && Math.random() < midKill) {
+        if (game.life && game.life[i] && LifeRNG.random() < midKill) {
           game.life[i] = 0;
           if (game.owner) game.owner[i] = 0;
         }
-      } else if (game.life && game.life[i] && Math.random() < farKill) {
+      } else if (game.life && game.life[i] && LifeRNG.random() < farKill) {
         game.life[i] = 0;
         if (game.owner) game.owner[i] = 0;
       }
@@ -2661,7 +2661,7 @@
     game.extremeTint = Math.max(game.extremeTint || 0, 14);
     coastTsunami(game);
     if (level >= 2) coastTsunami(game);
-    game.glacialLeft = 100 + level * 40 + Math.floor(Math.random() * 41);
+    game.glacialLeft = 100 + level * 40 + Math.floor(LifeRNG.random() * 41);
     game.iceAge = true;
     freezeRivers(game, true);
     game.calderaCoolLeft = 0;
@@ -2687,8 +2687,8 @@
   }
 
   function fireMegaClimate(game, events) {
-    const left = 100 + Math.floor(Math.random() * 61);
-    if (Math.random() < 0.5) {
+    const left = 100 + Math.floor(LifeRNG.random() * 61);
+    if (LifeRNG.random() < 0.5) {
       game.climateKind = "hot";
       game.climateLeft = left;
       game.yearKind = "dry";
@@ -2707,7 +2707,7 @@
         const y = Math.floor(i / game.cols);
         if (y / Math.max(1, rows - 1) > 0.38) continue;
         if (game.baseTerrain[i] !== TERRAIN.HIGHLAND) continue;
-        if (Math.random() > 0.08) continue;
+        if (LifeRNG.random() > 0.08) continue;
         forceTerrain(game, i, TERRAIN.SNOW, 0);
       }
       events.push("全球嚴寒");
@@ -2724,7 +2724,7 @@
     for (let i = 0; i < game.baseTerrain.length; i++) {
       const t = game.baseTerrain[i];
       if (t !== TERRAIN.ROCK && t !== TERRAIN.HIGHLAND && t !== TERRAIN.SNOW) continue;
-      if (Math.random() > 0.045) continue;
+      if (LifeRNG.random() > 0.045) continue;
       const x = i % cols;
       const y = (i - x) / cols;
       const nx = wrap(x + dx, cols);
@@ -2740,21 +2740,21 @@
       n += 1;
       if (n > 28) break;
     }
-    if (n > 6 && Math.random() < 0.45) {
+    if (n > 6 && LifeRNG.random() < 0.45) {
       events.push(dx > 0 ? "山脈往東移了一截" : "山脈往西移了一截");
     }
   }
 
   function fireEpochShore(game, events) {
-    if ((game.glacialLeft || 0) <= 0 && Math.random() < 0.5) {
-      game.coastRecedeLeft = 90 + Math.floor(Math.random() * 41);
+    if ((game.glacialLeft || 0) <= 0 && LifeRNG.random() < 0.5) {
+      game.coastRecedeLeft = 90 + Math.floor(LifeRNG.random() * 41);
       game.yearKind = "dry";
       const note = applyYearSea(game);
       if (note) events.push(note);
       events.push("岸線大退");
       return;
     }
-    game.swampAgeLeft = 80 + Math.floor(Math.random() * 41);
+    game.swampAgeLeft = 80 + Math.floor(LifeRNG.random() * 41);
     expandLowMarshes(game, 36);
     events.push("湖沼擴張");
   }
@@ -2768,7 +2768,7 @@
       const t = game.baseTerrain[i];
       if (t !== TERRAIN.SOIL && t !== TERRAIN.FERTILE && t !== TERRAIN.GROVE) continue;
       if (game.height[i] > sea + 6) continue;
-      if (Math.random() > 0.45) continue;
+      if (LifeRNG.random() > 0.45) continue;
       writeLand(game, i, TERRAIN.MARSH);
       n += 1;
     }
@@ -2781,7 +2781,7 @@
     if (st !== "pending" && st !== "coming") return;
     if (g < at - EPOCH_LEAD) return;
     if (st === "pending") {
-      if (Math.random() < chance) {
+      if (LifeRNG.random() < chance) {
         game[key] = "coming";
         game.epochOmen = coming;
         if (coming === "shore") events.push("岸將遷");
@@ -2804,7 +2804,7 @@
     else if (key === "epochClimate") fireMegaClimate(game, events);
     else if (key === "epochShore") fireEpochShore(game, events);
     else if (key === "epochDrift") {
-      game.driftDx = Math.random() < 0.5 ? 1 : -1;
+      game.driftDx = LifeRNG.random() < 0.5 ? 1 : -1;
       events.push(game.driftDx > 0 ? "山脈開始往東蠕動" : "山脈開始往西蠕動");
     }
   }
@@ -2812,11 +2812,11 @@
   function tickEpochs(game) {
     const events = [];
     if (!game.epochVolcano) game.epochVolcano = "pending";
-    if (game.epochVolcanoAt == null) game.epochVolcanoAt = 1820 + Math.floor(Math.random() * 361);
-    if (game.epochClimateAt == null) game.epochClimateAt = 5750 + Math.floor(Math.random() * 501);
-    if (game.epochDriftAt == null) game.epochDriftAt = 7800 + Math.floor(Math.random() * 401);
+    if (game.epochVolcanoAt == null) game.epochVolcanoAt = 1820 + Math.floor(LifeRNG.random() * 361);
+    if (game.epochClimateAt == null) game.epochClimateAt = 5750 + Math.floor(LifeRNG.random() * 501);
+    if (game.epochDriftAt == null) game.epochDriftAt = 7800 + Math.floor(LifeRNG.random() * 401);
     if (!game.epochShore) game.epochShore = "pending";
-    if (game.epochShoreAt == null) game.epochShoreAt = 9800 + Math.floor(Math.random() * 601);
+    if (game.epochShoreAt == null) game.epochShoreAt = 9800 + Math.floor(LifeRNG.random() * 601);
     if (game.epochVolcano === "skipped") {
       game.volcanoMiss = Math.max(game.volcanoMiss || 0, 1);
       game.epochVolcano = "pending";
@@ -2838,7 +2838,7 @@
         }
         events.push("中冰期結束");
         if (game.caldera && Object.keys(game.caldera).length) {
-          game.calderaCoolLeft = 40 + Math.floor(Math.random() * 31);
+          game.calderaCoolLeft = 40 + Math.floor(LifeRNG.random() * 31);
         }
       }
     }

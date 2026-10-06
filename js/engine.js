@@ -81,10 +81,26 @@
     rollYear(game);
   }
 
-  function createGame(cols, rows) {
+  function beginWorld(game, seed) {
+    game.seed = seed != null ? seed >>> 0 : global.LifeRNG.freshSeed();
+    game.log = [];
+    game.ticks = 0;
+    global.LifeRNG.seed(game.seed);
+  }
+
+  function record(game, type, a, b, c) {
+    if (game.log && !game.replaying && !game.quiet) game.log.push([game.ticks || 0, type, a, b, c]);
+  }
+
+  function createGame(cols, rows, seed) {
     const size = normalizeSize(cols, rows);
+    const seedVal = seed != null ? seed >>> 0 : global.LifeRNG.freshSeed();
+    global.LifeRNG.seed(seedVal);
     const packed = W.generateWorld(size.cols, size.rows);
     const game = {
+      seed: seedVal,
+      log: [],
+      ticks: 0,
       cols: size.cols,
       rows: size.rows,
       terrain: packed.terrain,
@@ -130,17 +146,20 @@
     return game;
   }
 
-  function newMap(game) {
+  function newMap(game, seed) {
+    beginWorld(game, seed);
     resetClimate(game, W.generateWorld(game.cols, game.rows));
   }
 
-  function resizeMap(game, cols, rows) {
+  function resizeMap(game, cols, rows, seed) {
     const size = normalizeSize(cols, rows);
+    beginWorld(game, seed);
     allocBoard(game, size.cols, size.rows);
     resetClimate(game, W.generateWorld(size.cols, size.rows));
   }
 
   function clearLife(game) {
+    record(game, "clear");
     game.life.fill(0);
     if (game.owner) game.owner.fill(0);
     if (game.nextOwner) game.nextOwner.fill(0);
@@ -182,7 +201,7 @@
       }
       return note;
     }
-    const r = Math.random();
+    const r = LifeRNG.random();
     let kind = "normal";
     if (r < 0.28) kind = "wet";
     else if (r < 0.56) kind = "dry";
@@ -202,7 +221,7 @@
   function tryPest(game, seasonId) {
     if (seasonId !== "rain" && seasonId !== "drought") return null;
     if (game.pestYear) return null;
-    if (Math.random() > 0.15) return null;
+    if (LifeRNG.random() > 0.15) return null;
     game.pestYear = true;
     game.pestTint = 18;
     return "這一季蟲疾";
@@ -294,7 +313,7 @@
   function shuffled(list) {
     const a = list.slice();
     for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(LifeRNG.random() * (i + 1));
       const t = a[i];
       a[i] = a[j];
       a[j] = t;
@@ -600,7 +619,7 @@
       if (game.yearKind === "wet") iceChance = 0.12;
       else if (game.yearKind === "dry") iceChance = 0.35;
       if ((game.glacialLeft || 0) > 0 || game.climateKind === "cold") iceChance = 1;
-      game.iceAge = Math.random() < iceChance;
+      game.iceAge = LifeRNG.random() < iceChance;
       W.freezeRivers(game, game.iceAge || !!(game.glacialLeft || game.climateKind === "cold"));
       const ice = global.LifeCiv.tryWinterCrossings(game, isPlantable);
       if (ice && ice.length) {
@@ -753,6 +772,7 @@
     game.owner = nextOwner;
     game.nextOwner = oldOwner;
     game.generation += 1;
+    game.ticks = (game.ticks || 0) + 1;
     const raftNote = Civ.tickRafts ? Civ.tickRafts(game) : null;
 
     const fresh = game.life;
@@ -862,6 +882,7 @@
     const i = W.idx(x, y, game.cols);
     if (game.life[i]) return false;
     if (game.energy < 1) return false;
+    record(game, "plant", x, y);
     game.energy -= 1;
     game.life[i] = 1;
     if (game.owner) game.owner[i] = neighborCivOwner(game, x, y);
@@ -872,6 +893,7 @@
   function erase(game, x, y) {
     const i = W.idx(x, y, game.cols);
     if (!game.life[i]) return false;
+    record(game, "erase", x, y);
     game.life[i] = 0;
     if (game.owner) game.owner[i] = 0;
     return true;
@@ -891,6 +913,7 @@
     const cost = cells.length;
     if (game.energy < cost) return false;
     if (!canStamp(game, cells, ox, oy)) return false;
+    record(game, "stamp", cells, ox, oy);
     game.energy -= cost;
     for (let i = 0; i < cells.length; i++) {
       const x = W.wrap(ox + cells[i][0], game.cols);
@@ -904,17 +927,27 @@
   }
 
   function scatter(game, budget) {
+    record(game, "scatter", budget);
+    game.quiet = true;
+    try {
+      return scatterInner(game, budget);
+    } finally {
+      game.quiet = false;
+    }
+  }
+
+  function scatterInner(game, budget) {
     const spend = Math.min(game.energy, budget);
     let placed = 0;
     let guard = 0;
     const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
     while (placed + 1 < spend && guard < spend * 50) {
       guard++;
-      const x = Math.floor(Math.random() * game.cols);
-      const y = Math.floor(Math.random() * game.rows);
+      const x = Math.floor(LifeRNG.random() * game.cols);
+      const y = Math.floor(LifeRNG.random() * game.rows);
       if (!plant(game, x, y)) continue;
       placed++;
-      const start = Math.floor(Math.random() * dirs.length);
+      const start = Math.floor(LifeRNG.random() * dirs.length);
       for (let d = 0; d < dirs.length && placed < spend; d++) {
         const dir = dirs[(start + d) % dirs.length];
         const nx = W.wrap(x + dir[0], game.cols);
@@ -927,6 +960,61 @@
       }
     }
     return placed;
+  }
+
+  function saveOf(game) {
+    return {
+      v: 1,
+      version: global.GAME_VERSION || "",
+      seed: game.seed,
+      cols: game.cols,
+      rows: game.rows,
+      ticks: game.ticks || 0,
+      generation: game.generation,
+      log: game.log,
+    };
+  }
+
+  // 依紀錄重播。replayStart 回傳可分段推進的工作：job.advance(毫秒預算) → 是否完成。
+  function replayStart(save) {
+    const game = createGame(save.cols, save.rows, save.seed);
+    const log = save.log || [];
+    const target = save.ticks || 0;
+    let li = 0;
+    game.replaying = true;
+    function applyDue() {
+      while (li < log.length && log[li][0] <= game.ticks) {
+        const a = log[li++];
+        if (a[1] === "plant") plant(game, a[2], a[3]);
+        else if (a[1] === "erase") erase(game, a[2], a[3]);
+        else if (a[1] === "stamp") stamp(game, a[2], a[3], a[4]);
+        else if (a[1] === "scatter") scatter(game, a[2]);
+        else if (a[1] === "clear") clearLife(game);
+      }
+    }
+    applyDue();
+    const job = {
+      game: game,
+      target: target,
+      advance: function (budgetMs) {
+        const t0 = Date.now();
+        while (game.ticks < target && (budgetMs == null || Date.now() - t0 < budgetMs)) {
+          step(game);
+          applyDue();
+        }
+        if (game.ticks < target) return false;
+        game.replaying = false;
+        game.log = log.slice();
+        return true;
+      },
+    };
+    return job;
+  }
+
+  function replay(save) {
+    const job = replayStart(save);
+    job.advance(null);
+    return job.game;
   }
 
   function tickFlashes(game) {
@@ -957,5 +1045,8 @@
     stamp: stamp,
     scatter: scatter,
     tickFlashes: tickFlashes,
+    replay: replay,
+    replayStart: replayStart,
+    saveOf: saveOf,
   };
 })(window);

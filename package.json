@@ -1,0 +1,7 @@
+{
+  "name": "mazectric-life",
+  "private": true,
+  "scripts": {
+    "test": "node test/determinism.js"
+  }
+}

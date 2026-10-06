@@ -94,6 +94,9 @@
   let camY = 96;
   let lastStep = 0;
   let toastTimer = 0;
+  let loading = false;
+  let stepsSinceSave = 0;
+  const AUTOSAVE_KEY = "mazectric-autosave-v1";
 
   function speedDelay() {
     const v = Number(speedEl.value);
@@ -112,6 +115,81 @@
       }
     } catch (err) {}
     return (engine.MAP_SIZES && engine.MAP_SIZES[1]) || { cols: 320, rows: 192 };
+  }
+
+  function saveToLocal() {
+    if (!game || loading) return;
+    try {
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(engine.saveOf(game)));
+      stepsSinceSave = 0;
+    } catch (err) {}
+  }
+
+  function readLocalSave() {
+    try {
+      const raw = localStorage.getItem(AUTOSAVE_KEY);
+      return raw ? validSave(JSON.parse(raw)) : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function validSave(o) {
+    if (!o || typeof o !== "object") return null;
+    if (!Number.isFinite(o.seed) || !Number.isFinite(o.ticks) || o.ticks < 0) return null;
+    if (!Array.isArray(o.log)) return null;
+    const ok = (engine.MAP_SIZES || []).some(function (z) {
+      return z.cols === o.cols && z.rows === o.rows;
+    });
+    return ok ? o : null;
+  }
+
+  function downloadSave() {
+    if (!game) return;
+    const save = engine.saveOf(game);
+    const blob = new Blob([JSON.stringify(save)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "mazectric-" + save.seed + "-g" + save.generation + ".json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () {
+      URL.revokeObjectURL(a.href);
+    }, 1000);
+    setStatus("已存檔（種子 " + save.seed + "，第 " + save.generation + " 代）。");
+  }
+
+  // 重播存檔：分段推進，畫面不會卡死。
+  function loadSave(save) {
+    if (loading) return;
+    playing = false;
+    btnPlay.textContent = "播放";
+    btnPlay.classList.remove("playing");
+    loading = true;
+    const job = engine.replayStart(save);
+    const overlay = document.getElementById("size-overlay");
+    if (overlay) overlay.classList.add("hidden");
+    function pump() {
+      const done = job.advance(40);
+      if (!done) {
+        setStatus("讀檔中… " + job.game.ticks + " / " + job.target);
+        setTimeout(pump, 0);
+        return;
+      }
+      loading = false;
+      game = job.game;
+      focusedOwner = null;
+      viewZoom = 1;
+      camX = game.cols / 2;
+      camY = game.rows / 2;
+      closeChronicle();
+      hud();
+      resize();
+      draw();
+      setStatus("已讀檔：第 " + game.generation + " 代（種子 " + game.seed + "）。");
+    }
+    pump();
   }
 
   function startWithSize(cols, rows) {
@@ -138,9 +216,10 @@
         game.rows +
         "。" +
         (game.worldNote ? game.worldNote + "。" : "") +
-        "左鍵種植，右鍵擦除。"
+        "種子 " + game.seed + "。左鍵種植，右鍵擦除。"
     );
     if (game.worldNote) showToast(game.worldNote);
+    saveToLocal();
     if (window.LifeDebug) {
       window.LifeDebug.cols = game.cols;
       window.LifeDebug.rows = game.rows;
@@ -169,6 +248,19 @@
       });
       box.appendChild(btn);
     });
+    const resume = document.getElementById("size-resume");
+    if (resume) {
+      const prev = readLocalSave();
+      if (prev && prev.ticks > 0) {
+        resume.textContent = "繼續上次那局（第 " + (prev.generation || prev.ticks) + " 代，" + prev.cols + "×" + prev.rows + "）";
+        resume.onclick = function () {
+          loadSave(prev);
+        };
+        resume.classList.remove("hidden");
+      } else {
+        resume.classList.add("hidden");
+      }
+    }
     if (cancel) {
       if (canCancel && game) cancel.classList.remove("hidden");
       else cancel.classList.add("hidden");
@@ -1195,7 +1287,7 @@
   }
 
   function doStep(opts) {
-    if (!game) return;
+    if (!game || loading) return;
     const result = engine.step(game);
     if (window.LifeDebug) {
       window.LifeDebug.steps = (window.LifeDebug.steps || 0) + 1;
@@ -1205,6 +1297,7 @@
     scanDiscoveries();
     hud();
     if (!opts || opts.draw !== false) draw();
+    if (++stepsSinceSave >= 100) saveToLocal();
     if (result.extinct) {
       playing = false;
       btnPlay.textContent = "播放";
@@ -1417,6 +1510,7 @@
     btnPlay.textContent = "播放";
     btnPlay.classList.remove("playing");
     engine.newMap(game);
+    saveToLocal();
     viewZoom = 1;
     camX = game.cols / 2;
     camY = game.rows / 2;
@@ -1424,6 +1518,38 @@
     hud();
     draw();
     setStatus(game.worldNote ? game.worldNote + "。滾輪放大，中鍵拖曳平移。" : "新地圖已生成。");
+  });
+
+  const btnSave = document.getElementById("btn-save");
+  const btnLoad = document.getElementById("btn-load");
+  const loadFile = document.getElementById("load-file");
+  if (btnSave) btnSave.addEventListener("click", downloadSave);
+  if (btnLoad && loadFile) {
+    btnLoad.addEventListener("click", function () {
+      loadFile.click();
+    });
+    loadFile.addEventListener("change", function () {
+      const f = loadFile.files && loadFile.files[0];
+      loadFile.value = "";
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = function () {
+        let save = null;
+        try {
+          save = validSave(JSON.parse(String(reader.result)));
+        } catch (err) {}
+        if (!save) {
+          setStatus("讀檔失敗：不是有效的存檔。");
+          return;
+        }
+        loadSave(save);
+      };
+      reader.readAsText(f);
+    });
+  }
+  window.addEventListener("pagehide", saveToLocal);
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) saveToLocal();
   });
 
   if (btnSize) {
@@ -1436,6 +1562,18 @@
     sizeCancel.addEventListener("click", function () {
       const overlay = document.getElementById("size-overlay");
       if (overlay && game) overlay.classList.add("hidden");
+    });
+  }
+
+  const btnRotate = document.getElementById("btn-rotate");
+  if (btnRotate) {
+    btnRotate.addEventListener("click", function () {
+      if (!stampCells) {
+        setStatus("先在側欄選一個圖章再旋轉。");
+        return;
+      }
+      stampCells = window.LifePatterns.rotate90(stampCells);
+      draw();
     });
   }
 

@@ -59,20 +59,39 @@
   function collectMatches(game, pattern) {
     const matches = [];
     if (!pattern) return matches;
+    const cols = game.cols;
+    const rows = game.rows;
+    const life = game.life;
+    // 只從活細胞反推可能的原點，不必掃整張圖；順序與全圖掃描一致（先 y 後 x）。
+    const live = [];
+    for (let i = 0; i < life.length; i++) if (life[i]) live.push(i);
     for (let v = 0; v < pattern.variants.length; v++) {
       const variant = pattern.variants[v];
       const occupied = cellsOf(variant);
-      for (let y = 0; y < game.rows; y++) {
-        for (let x = 0; x < game.cols; x++) {
-          if (!matchAt(game, x, y, variant, occupied)) continue;
-          const cells = variant.map(function (p) {
-            return {
-              x: W.wrap(x + p[0], game.cols),
-              y: y + p[1],
-            };
-          });
-          matches.push({ ox: x, oy: y, cells: cells });
-        }
+      const fx = variant[0][0];
+      const fy = variant[0][1];
+      const origins = [];
+      for (let k = 0; k < live.length; k++) {
+        const lx = live[k] % cols;
+        const ly = (live[k] - lx) / cols;
+        const oy = ly - fy;
+        if (oy < 0 || oy >= rows) continue;
+        origins.push(oy * cols + W.wrap(lx - fx, cols));
+      }
+      origins.sort(function (a, b) {
+        return a - b;
+      });
+      for (let k = 0; k < origins.length; k++) {
+        const x = origins[k] % cols;
+        const y = (origins[k] - x) / cols;
+        if (!matchAt(game, x, y, variant, occupied)) continue;
+        const cells = variant.map(function (p) {
+          return {
+            x: W.wrap(x + p[0], cols),
+            y: y + p[1],
+          };
+        });
+        matches.push({ ox: x, oy: y, cells: cells });
       }
     }
     return matches;

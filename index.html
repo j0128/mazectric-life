@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>生存遊戲 v4.4 · Mazectric</title>
-      <link rel="stylesheet" href="css/game.css?v=4.4">
+      <title>生存遊戲 v4.5 · Mazectric</title>
+      <link rel="stylesheet" href="css/game.css?v=4.5">
     </head>
     <body>
       <div id="app">
         <header class="topbar">
           <div class="title-block">
-            <h1>生存遊戲 <span class="ver" id="game-version">v4.4</span></h1>
+            <h1>生存遊戲 <span class="ver" id="game-version">v4.5</span></h1>
             <p>Mazectric 生命 · 演化殖民地　誕生 3 · 存活隨地形</p>
           </div>
       <div class="hud">
@@ -43,8 +43,8 @@
 
     <main class="main">
       <section class="stage">
-        <canvas id="board" tabindex="0"></canvas>
-        <div id="toast" class="toast hidden"></div>
+        <canvas id="board" tabindex="0" role="img" aria-label="細胞自動機地圖：左鍵種植、右鍵擦除、滾輪縮放。空格播放或暫停，N 單步，R 旋轉圖章"></canvas>
+        <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
       </section>
 
       <aside class="side">
@@ -135,14 +135,18 @@
     <footer class="toolbar">
       <button id="btn-play" class="primary" type="button">播放</button>
       <button id="btn-step" type="button">單步</button>
+      <button id="btn-rotate" type="button" title="旋轉選中的圖章（R）" aria-label="旋轉圖章">旋轉</button>
       <label class="speed">
         速度
-        <input id="speed" type="range" min="1" max="10" value="5">
+        <input id="speed" type="range" min="1" max="10" value="5" aria-label="速度">
       </label>
       <button id="btn-scatter" type="button">隨機散種</button>
       <button id="btn-clear" type="button">清空生命</button>
       <button id="btn-new" type="button">新一局</button>
       <button id="btn-size" type="button">改格子</button>
+      <button id="btn-save" type="button" title="把這一局存成檔案（種子＋操作紀錄）">存檔</button>
+      <button id="btn-load" type="button" title="讀取存檔檔案，會重播到存檔時的代數">讀檔</button>
+      <input id="load-file" type="file" accept=".json,application/json" hidden>
       <p class="status" id="status">左鍵種植，右鍵擦除。空格播放／暫停。</p>
     </footer>
   </div>
@@ -152,16 +156,18 @@
       <h2>選擇地圖大小</h2>
       <p>格子越多岸線越細，演化也越慢。可隨時按「改格子」重選。</p>
       <div id="size-choices" class="size-choices"></div>
+      <button id="size-resume" type="button" class="size-resume hidden"></button>
       <button id="size-cancel" type="button" class="size-cancel hidden">取消</button>
     </div>
   </div>
 
-  <script src="js/version.js?v=4.4"></script>
-  <script src="js/patterns.js?v=4.4"></script>
-  <script src="js/world.js?v=4.4"></script>
-  <script src="js/gallery.js?v=4.4"></script>
-  <script src="js/civ.js?v=4.4"></script>
-  <script src="js/engine.js?v=4.4"></script>
-  <script src="js/app.js?v=4.4"></script>
+  <script src="js/version.js?v=4.5"></script>
+  <script src="js/rng.js?v=4.5"></script>
+  <script src="js/patterns.js?v=4.5"></script>
+  <script src="js/world.js?v=4.5"></script>
+  <script src="js/gallery.js?v=4.5"></script>
+  <script src="js/civ.js?v=4.5"></script>
+  <script src="js/engine.js?v=4.5"></script>
+  <script src="js/app.js?v=4.5"></script>
 </body>
 </html>

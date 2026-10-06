@@ -72,8 +72,8 @@
 
   function landSnakeBlocked(game, settl) {
     if (!snakeSlotFull(game)) return false;
-    if (settl && hasCraft(settl, "wheel") && Math.random() < 0.55) return false;
-    if (settl && settl.farSail && Math.random() < 0.55) return false;
+    if (settl && hasCraft(settl, "wheel") && LifeRNG.random() < 0.55) return false;
+    if (settl && settl.farSail && LifeRNG.random() < 0.55) return false;
     return true;
   }
   const HALL_WALL = 4;
@@ -106,14 +106,14 @@
   ];
 
   function disasterWait() {
-    return 96 + Math.floor(Math.random() * 33) - 16;
+    return 96 + Math.floor(LifeRNG.random() * 33) - 16;
   }
 
   function npcWait(game) {
     const gen = (game && game.generation) || 0;
-    let base = 50 + Math.floor(Math.random() * 31);
-    if (gen > 4000) base = 220 + Math.floor(Math.random() * 121);
-    else if (gen > 2000) base = 140 + Math.floor(Math.random() * 81);
+    let base = 50 + Math.floor(LifeRNG.random() * 31);
+    if (gen > 4000) base = 220 + Math.floor(LifeRNG.random() * 121);
+    else if (gen > 2000) base = 140 + Math.floor(LifeRNG.random() * 81);
     return base;
   }
 
@@ -157,10 +157,10 @@
       stormPath: {},
       stormDir: { dx: 1, dy: 1 },
       quakeRing: null,
-      epochVolcanoAt: 1820 + Math.floor(Math.random() * 361),
-      epochClimateAt: 5750 + Math.floor(Math.random() * 501),
-      epochDriftAt: 7800 + Math.floor(Math.random() * 401),
-      epochShoreAt: 9800 + Math.floor(Math.random() * 601),
+      epochVolcanoAt: 1820 + Math.floor(LifeRNG.random() * 361),
+      epochClimateAt: 5750 + Math.floor(LifeRNG.random() * 501),
+      epochDriftAt: 7800 + Math.floor(LifeRNG.random() * 401),
+      epochShoreAt: 9800 + Math.floor(LifeRNG.random() * 601),
       epochVolcano: "pending",
       epochClimate: "pending",
       epochDrift: "pending",
@@ -179,15 +179,15 @@
   }
 
   function crisisWait() {
-    return 55 + Math.floor(Math.random() * 36);
+    return 55 + Math.floor(LifeRNG.random() * 36);
   }
 
   function blowWait() {
-    return 110 + Math.floor(Math.random() * 61);
+    return 110 + Math.floor(LifeRNG.random() * 61);
   }
 
   function darkWait() {
-    return 180 + Math.floor(Math.random() * 121);
+    return 180 + Math.floor(LifeRNG.random() * 121);
   }
 
   function idx(game, x, y) {
@@ -275,7 +275,7 @@
 
   function shuffleInPlace(list) {
     for (let i = list.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(LifeRNG.random() * (i + 1));
       const t = list[i];
       list[i] = list[j];
       list[j] = t;
@@ -356,7 +356,7 @@
       empire: false,
       kingLived: 0,
       hero: null,
-      heroIn: 12 + Math.floor(Math.random() * 20),
+      heroIn: 12 + Math.floor(LifeRNG.random() * 20),
       alive: false,
       lived: 0,
       nextRoll: ROLL_AGE,
@@ -654,7 +654,7 @@
     const age = f.lived || 0;
     const need = f.nextRoll || ROLL_AGE;
     if (age < need) return;
-    if (Math.random() < 0.7) {
+    if (LifeRNG.random() < 0.7) {
       const id = pickTrait(memorySettl || { memory: emptyMemory() });
       f.skills[id] = 1;
       events.push(civName(f.n) + "學會了" + TRAITS[id].name);
@@ -673,13 +673,13 @@
   function pickHeroTags() {
     const bag = HERO_IDS.slice();
     for (let i = bag.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(LifeRNG.random() * (i + 1));
       const t = bag[i];
       bag[i] = bag[j];
       bag[j] = t;
     }
     const tags = [bag[0]];
-    if (Math.random() < 0.2 && bag[1]) tags.push(bag[1]);
+    if (LifeRNG.random() < 0.2 && bag[1]) tags.push(bag[1]);
     return tags;
   }
 
@@ -699,7 +699,7 @@
       if (f.hero.age >= (f.hero.maxAge || 50)) {
         events.push(civName(f.n) + "之主辭世");
         f.hero = null;
-        f.heroIn = 20 + Math.floor(Math.random() * 24);
+        f.heroIn = 20 + Math.floor(LifeRNG.random() * 24);
       }
       return;
     }
@@ -713,13 +713,13 @@
       f.heroIn = 1;
       return;
     }
-    if (Math.random() > 0.3) {
+    if (LifeRNG.random() > 0.3) {
       f.heroIn = 8;
       return;
     }
     const tags = pickHeroTags();
-    let maxAge = 40 + Math.floor(Math.random() * 31);
-    if (tags.indexOf("brief") >= 0) maxAge = 22 + Math.floor(Math.random() * 16);
+    let maxAge = 40 + Math.floor(LifeRNG.random() * 31);
+    if (tags.indexOf("brief") >= 0) maxAge = 22 + Math.floor(LifeRNG.random() * 16);
     f.hero = { tags: tags, age: 0, maxAge: maxAge };
     f.heroIn = 0;
     events.push(civName(f.n) + "出了" + heroLabel(tags) + "之主");
@@ -748,7 +748,7 @@
       nf.n = mintOrdinal(game);
       nf.alive = true;
       Object.keys((f && f.skills) || {}).forEach(function (id) {
-        if (Math.random() < 0.5) nf.skills[id] = 1;
+        if (LifeRNG.random() < 0.5) nf.skills[id] = 1;
       });
       splinter.owner = who;
       splinter.npc = true;
@@ -775,7 +775,7 @@
     if (hasHeroTag(game, o, "cruel")) chance += 0.08;
     if (hasHeroTag(game, o, "humane")) chance *= 0.4;
     if (factionHasSkill(game, o, "law")) chance *= 0.28;
-    if (hasHeroTag(game, o, "fool") && Math.random() < 0.5) return 0;
+    if (hasHeroTag(game, o, "fool") && LifeRNG.random() < 0.5) return 0;
     return chance;
   }
 
@@ -799,7 +799,7 @@
       if ((f.hungryStreak || 0) < HUNGER_BREAK) continue;
       const towns = (byOwner[o] || []).length;
       const atCap = livingFactionCount(game) >= LIVING_CAP;
-      if (towns >= 2 && !atCap && Math.random() < hungerBreakChance(game, o, f)) {
+      if (towns >= 2 && !atCap && LifeRNG.random() < hungerBreakChance(game, o, f)) {
         if (tryCivilSplit(game, events, o)) return;
       }
       if (towns >= 2 && atCap && !factionHasSkill(game, o, "law")) {
@@ -842,7 +842,7 @@
     if (towns > 1 && pop > 22) return false;
     let p = 0.16;
     if (ownerHasCraft(game, winner, "copper")) p = 0.3;
-    if (Math.random() > p) return false;
+    if (LifeRNG.random() > p) return false;
     return absorbFaction(game, loser, winner, events);
   }
 
@@ -869,7 +869,7 @@
       else f.townless = (f.townless || 0) + 1;
       if (isHungry(game, o)) {
         f.hungryStreak = (f.hungryStreak || 0) + 1;
-        if (ownerHasCraft(game, o, "pot") && Math.random() < 0.32) {
+        if (ownerHasCraft(game, o, "pot") && LifeRNG.random() < 0.32) {
           f.hungryStreak = Math.max(0, f.hungryStreak - 1);
         }
       } else f.hungryStreak = 0;
@@ -1299,7 +1299,7 @@
   function pickWeighted(ids, weights) {
     let sum = 0;
     for (let i = 0; i < weights.length; i++) sum += Math.max(1, weights[i]);
-    let r = Math.random() * sum;
+    let r = LifeRNG.random() * sum;
     for (let i = 0; i < ids.length; i++) {
       r -= Math.max(1, weights[i]);
       if (r <= 0) return ids[i];
@@ -1476,7 +1476,7 @@
       if (!settl.trait) return;
       if ((settl.age || 0) < CRAFT_AGE && potencyOf(settl) < 1) return;
       if (settl.craftIn != null && (settl.age || 0) < settl.craftIn) return;
-      if (Math.random() < 0.62) {
+      if (LifeRNG.random() < 0.62) {
         settl.craft = pickCraft(settl);
         rememberSkills(game, settl);
         events.push({ text: "一座聚落學會了工藝「" + CRAFTS[settl.craft].name + "」", owner: settl.owner || 0 });
@@ -1509,11 +1509,11 @@
     const needGen = METAL_MIN_GEN[next];
     if ((game.generation || 0) < needGen) return;
     if (settl.metalIn != null && (settl.age || 0) < settl.metalIn) return;
-    if (!townHasMetalNeed(game, settl) && Math.random() < 0.55) {
+    if (!townHasMetalNeed(game, settl) && LifeRNG.random() < 0.55) {
       settl.metalIn = (settl.age || 0) + METAL_RETRY;
       return;
     }
-    if (Math.random() < 0.38) {
+    if (LifeRNG.random() < 0.38) {
       settl.craft = next;
       settl.metalIn = undefined;
       rememberSkills(game, settl);
@@ -1602,7 +1602,7 @@
     if (settl.freshSite) p += 0.22;
     if (boostFn) p = boostFn(game, settl, p);
     if (p > 0.88) p = 0.88;
-    if (Math.random() < p) {
+    if (LifeRNG.random() < p) {
       settl[flag] = 1;
       events.push({ text: "一座聚落學會了" + label, owner: settl.owner || 0 });
     } else {
@@ -1709,12 +1709,12 @@
     settl.legacy = src.legacy || null;
     settl.lineageId = src.lineageId || src.id || settl.id;
     settl.inspiredBy = src.inspiredBy ? Object.assign({}, src.inspiredBy) : {};
-    settl.caravanIn = src.caravanIn != null ? src.caravanIn : 20 + Math.floor(Math.random() * 12);
+    settl.caravanIn = src.caravanIn != null ? src.caravanIn : 20 + Math.floor(LifeRNG.random() * 12);
     settl.memory = Object.assign(emptyMemory(), src.memory || {});
     settl.hungryStreak = src.hungryStreak || 0;
     settl.walled = !!src.walled;
-    settl.seedIn = src.seedIn != null ? src.seedIn : 12 + Math.floor(Math.random() * 10);
-    settl.riteVisitIn = src.riteVisitIn != null ? src.riteVisitIn : 28 + Math.floor(Math.random() * 20);
+    settl.seedIn = src.seedIn != null ? src.seedIn : 12 + Math.floor(LifeRNG.random() * 10);
+    settl.riteVisitIn = src.riteVisitIn != null ? src.riteVisitIn : 28 + Math.floor(LifeRNG.random() * 20);
     settl.alpine = src.alpine ? 1 : 0;
     settl.alpineIn = src.alpineIn;
     settl.ford = src.ford ? 1 : 0;
@@ -1742,7 +1742,7 @@
     const age = Math.max(settl.age || 0, f.lived || 0);
     const need = settl.nextRoll || f.nextRoll || ROLL_AGE;
     if (age < need) return;
-    if (Math.random() < 0.7) {
+    if (LifeRNG.random() < 0.7) {
       settl.trait = pickTrait(settl);
       rememberSkills(game, settl);
       events.push({ text: "一座聚落學會了" + TRAITS[settl.trait].name, owner: settl.owner || 0 });
@@ -2054,7 +2054,7 @@
   function shuffledLocal(list) {
     const a = list.slice();
     for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(LifeRNG.random() * (i + 1));
       const t = a[i];
       a[i] = a[j];
       a[j] = t;
@@ -2070,7 +2070,7 @@
     let sparked = false;
     (groups || []).forEach(function (g) {
       if (g.size < 8 || g.block) return;
-      if (Math.random() > 0.04) return;
+      if (LifeRNG.random() > 0.04) return;
       const origins = shuffledLocal(g.list.slice());
       for (let k = 0; k < origins.length; k++) {
         const i = origins[k];
@@ -2194,19 +2194,19 @@
         const i = cells[k];
         const x = i % cols;
         const y = (i - x) / cols;
-        const d = dirs[Math.floor(Math.random() * 4)];
+        const d = dirs[Math.floor(LifeRNG.random() * 4)];
         const ni = idx(game, x + d[0], y + d[1]);
         if (ni < 0 || ni >= game.baseTerrain.length) continue;
         if (game.life && game.life[ni]) continue;
         const t = game.baseTerrain[ni];
         if (t === TERRAIN.SOIL) {
-          const next = Math.random() < 0.55 ? TERRAIN.GROVE : TERRAIN.FERTILE;
+          const next = LifeRNG.random() < 0.55 ? TERRAIN.GROVE : TERRAIN.FERTILE;
           if (W.writeLand && W.writeLand(game, ni, next)) grew++;
         } else if (
           (t === TERRAIN.FERTILE || t === TERRAIN.GROVE || t === TERRAIN.MARSH) &&
           game.resources &&
           !game.resources[ni] &&
-          Math.random() < 0.22
+          LifeRNG.random() < 0.22
         ) {
           game.resources[ni] = RESOURCE.NUTRIENT;
           if (game.resAmt) game.resAmt[ni] = 1;
@@ -2329,13 +2329,13 @@
       const block = solidBlockCells(g.members, game);
       if (block) {
         block.forEach(function (i) {
-          if (Math.random() < pKill) toKill.push(i);
+          if (LifeRNG.random() < pKill) toKill.push(i);
         });
       }
       if (s && s.legacy === "wall") {
         g.list.forEach(function (i) {
           if (!hardy[i]) return;
-          if (Math.random() < pKill) {
+          if (LifeRNG.random() < pKill) {
             toKill.push(i);
             walls += 1;
           }
@@ -2357,7 +2357,7 @@
     let note = "地震掠過，房屋仍在";
     if (walls) note = "地震：城牆崩解";
     else if (houses) note = "地震：房屋倒塌";
-    if (Math.random() < 0.33 && W.spawnVolcanoIsle) {
+    if (LifeRNG.random() < 0.33 && W.spawnVolcanoIsle) {
       const isle = W.spawnVolcanoIsle(game);
       if (isle) return note + "。" + isle;
     }
@@ -2374,7 +2374,7 @@
     groups.forEach(function (g) {
       if (g.weak) killGroup(game, g);
     });
-    const kindRoll = Math.random();
+    const kindRoll = LifeRNG.random();
     if (kindRoll >= 0.6) {
       rememberDisaster(game, groups);
       events.push("災變：弱小族群被抹去");
@@ -2402,7 +2402,7 @@
       const local = [];
       list.forEach(function (g) {
         const chance = disasterChance(game, g);
-        if (Math.random() < chance) local.push(g);
+        if (LifeRNG.random() < chance) local.push(g);
       });
       if (local.length === list.length && list.length > 0) {
         local.sort(function (a, b) {
@@ -2467,7 +2467,7 @@
     if (settl.alpineLive && high) gift += 1 + Math.min(2, Math.floor(high / 6));
     if (glacial) gift = Math.max(0, Math.floor(gift * 0.45));
     if (gift) addFood(game, settl.owner || 0, gift);
-    if ((farm || settl.legacy === "market") && Math.random() < (settl.legacy === "market" ? 0.7 : 0.55)) {
+    if ((farm || settl.legacy === "market") && LifeRNG.random() < (settl.legacy === "market" ? 0.7 : 0.55)) {
       sowTownCrystal(game, settl);
     }
     return gift;
@@ -2498,7 +2498,7 @@
     const ox = Math.round(settl.cx);
     const oy = Math.round(settl.cy);
     for (let t = 0; t < dirs.length; t++) {
-      const d = dirs[Math.floor(Math.random() * dirs.length)];
+      const d = dirs[Math.floor(LifeRNG.random() * dirs.length)];
       const x = W.wrap(ox + d[0], game.cols);
       const y = oy + d[1];
       if (y < 0 || y >= game.rows) continue;
@@ -2707,9 +2707,9 @@
     let best = null;
     const variants = VILLAGE_VARIANTS;
     for (let attempt = 0; attempt < 140; attempt++) {
-      const cells = variants[Math.floor(Math.random() * variants.length)];
-      const ox = Math.floor(Math.random() * game.cols);
-      const oy = Math.floor(Math.random() * game.rows);
+      const cells = variants[Math.floor(LifeRNG.random() * variants.length)];
+      const ox = Math.floor(LifeRNG.random() * game.cols);
+      const oy = Math.floor(LifeRNG.random() * game.rows);
       const score = canPlaceVillage(game, cells, ox, oy);
       if (score == null) continue;
       if (tooCloseToPlayer(game, cells, ox, oy)) continue;
@@ -2820,8 +2820,8 @@
     let best = null;
     let bestScore = -1;
     for (let attempt = 0; attempt < 80; attempt++) {
-      const x = Math.floor(Math.random() * game.cols);
-      const y = Math.floor(Math.random() * game.rows);
+      const x = Math.floor(LifeRNG.random() * game.cols);
+      const y = Math.floor(LifeRNG.random() * game.rows);
       if (!isPlantable(game, x, y)) continue;
       const i = W.idx(x, y, game.cols);
       if (game.life[i]) continue;
@@ -2908,7 +2908,7 @@
   }
 
   function spawnCaravan(game, settl, isPlantable) {
-    if (settl.trait === "fish" && Math.random() < 0.72) return false;
+    if (settl.trait === "fish" && LifeRNG.random() < 0.72) return false;
     return spawnSnake(game, settl, pickCaravanTarget(game, settl), isPlantable, "culture");
   }
 
@@ -3042,7 +3042,7 @@
     if (!hit) return false;
     const victim = dest.owner || 0;
     const thief = caravan.owner || 0;
-    let steal = Math.min(foodOf(game, victim), 4 + Math.floor(Math.random() * 5));
+    let steal = Math.min(foodOf(game, victim), 4 + Math.floor(LifeRNG.random() * 5));
     if (ownerHasCraft(game, victim, "salt")) steal = Math.min(foodOf(game, victim), steal + 3);
     if (ownerHasCraft(game, thief, "copper")) steal = Math.min(foodOf(game, victim), steal + 2);
     spendFood(game, victim, steal);
@@ -3055,7 +3055,7 @@
       const edges = dest.list.filter(function (i) {
         return game.life[i] && !block[i];
       });
-      let scrape = 1 + Math.floor(Math.random() * 2);
+      let scrape = 1 + Math.floor(LifeRNG.random() * 2);
       if (ownerHasCraft(game, thief, "copper")) scrape += 1;
       shuffledLocal(edges).slice(0, scrape).forEach(function (i) {
         game.life[i] = 0;
@@ -3377,8 +3377,8 @@
     let best = null;
     let bestScore = -1;
     for (let attempt = 0; attempt < 80; attempt++) {
-      const x = Math.floor(Math.random() * game.cols);
-      const y = Math.floor(Math.random() * game.rows);
+      const x = Math.floor(LifeRNG.random() * game.cols);
+      const y = Math.floor(LifeRNG.random() * game.rows);
       const t = game.terrain[W.idx(x, y, game.cols)];
       if (t !== TERRAIN.SOIL && t !== TERRAIN.FERTILE && t !== TERRAIN.MARSH && t !== TERRAIN.GROVE) continue;
       if (!isPlantable(game, x, y)) continue;
@@ -3420,10 +3420,10 @@
   }
 
   function seedWait(settl, game) {
-    let wait = 40 + Math.floor(Math.random() * 17);
-    if (settl.trait === "expand") wait = 16 + Math.floor(Math.random() * 13);
-    else if (settl.trait === "climb" || settl.trait === "dike") wait = 26 + Math.floor(Math.random() * 15);
-    else if (settl.trait === "resist") wait = 32 + Math.floor(Math.random() * 17);
+    let wait = 40 + Math.floor(LifeRNG.random() * 17);
+    if (settl.trait === "expand") wait = 16 + Math.floor(LifeRNG.random() * 13);
+    else if (settl.trait === "climb" || settl.trait === "dike") wait = 26 + Math.floor(LifeRNG.random() * 15);
+    else if (settl.trait === "resist") wait = 32 + Math.floor(LifeRNG.random() * 17);
     const occ = ownerLifeCounts(game)[settl.owner || 0] || 0;
     wait += Math.min(48, Math.floor(occ / 22));
     const who = settl.owner || 0;
@@ -3457,11 +3457,11 @@
       if (s.seedIn > 0) return;
       s.seedIn = seedWait(s, game);
       if (isHungry(game, s.owner) && s.trait !== "resist") return;
-      if (packed > 0.32 && !hasHeroTag(game, s.owner, "vanity") && Math.random() < packed) return;
-      if (s.trait === "resist" && !(s.memory && s.memory.disaster) && Math.random() < 0.5) return;
+      if (packed > 0.32 && !hasHeroTag(game, s.owner, "vanity") && LifeRNG.random() < packed) return;
+      if (s.trait === "resist" && !(s.memory && s.memory.disaster) && LifeRNG.random() < 0.5) return;
       if (snakeBusy(game, s)) return;
       if ((s.trait === "sail" || s.farSail) && townTouchesSea(game, s) && !townOnRaft(game, s)) {
-        if (snakeSlotFull(game) && !(s.farSail && Math.random() < 0.55)) {
+        if (snakeSlotFull(game) && !(s.farSail && LifeRNG.random() < 0.55)) {
           /* fall through to land if slots full */
         } else {
           const sea = pickBoatTarget(game, s, isPlantable);
@@ -3543,7 +3543,7 @@
       if (s.iceWalk) roll += 0.28;
       if (hasHeroTag(game, s.owner, "settle") || hasHeroTag(game, s.owner, "vanity")) roll += 0.12;
       if (hasHeroTag(game, s.owner, "idle")) roll *= 0.5;
-      if (Math.random() > roll) return;
+      if (LifeRNG.random() > roll) return;
       const target = s.iceWalk
         ? pickIceSeaTarget(game, s, isPlantable) || pickCrossTarget(game, s, isPlantable)
         : pickCrossTarget(game, s, isPlantable);
@@ -3565,12 +3565,12 @@
 
   function wantRaid(game, s) {
     const o = s.owner || 0;
-    if (hasHeroTag(game, o, "fool") && Math.random() < 0.45) return false;
-    if (hasHeroTag(game, o, "humane") && Math.random() < 0.55) return false;
+    if (hasHeroTag(game, o, "fool") && LifeRNG.random() < 0.45) return false;
+    if (hasHeroTag(game, o, "humane") && LifeRNG.random() < 0.55) return false;
     if (hasHeroTag(game, o, "warlord") || hasHeroTag(game, o, "endless")) return true;
-    if (hasHeroTag(game, o, "cruel") && (isHungry(game, o) || Math.random() < 0.25)) return true;
+    if (hasHeroTag(game, o, "cruel") && (isHungry(game, o) || LifeRNG.random() < 0.25)) return true;
     if (s.trait === "expand" && (s.hungryStreak || 0) >= hungerNeed(s)) return true;
-    if (isHungry(game, o) && Math.random() < 0.2) return true;
+    if (isHungry(game, o) && LifeRNG.random() < 0.2) return true;
     return false;
   }
 
@@ -3589,7 +3589,7 @@
         if (s.trait !== "expand" && !hasHeroTag(game, s.owner, "settle") && !hasHeroTag(game, s.owner, "vanity")) {
           return;
         }
-      } else if (!(isHungry(game, s.owner) && Math.random() < 0.55)) {
+      } else if (!(isHungry(game, s.owner) && LifeRNG.random() < 0.55)) {
         return;
       }
       const res = pickMigrateTarget(game, s, isPlantable);
@@ -3628,7 +3628,7 @@
     let fights = 0;
     const take = Math.min(hits.length, 10);
     for (let k = 0; k < take; k++) {
-      const h = hits[Math.floor(Math.random() * hits.length)];
+      const h = hits[Math.floor(LifeRNG.random() * hits.length)];
       let chance = 0.12;
       if (haveTollPeace(game, h.a, h.b)) chance *= 0.35;
       if (tollTrustOf(game, h.a, h.b) >= 3) chance *= 0.55;
@@ -3639,12 +3639,12 @@
       if (hasHeroTag(game, h.a, "cruel") || hasHeroTag(game, h.b, "cruel")) chance += 0.06;
       if (hasHeroTag(game, h.a, "humane") && hasHeroTag(game, h.b, "humane")) chance *= 0.4;
       else if (hasHeroTag(game, h.a, "humane") || hasHeroTag(game, h.b, "humane")) chance *= 0.7;
-      if (hasHeroTag(game, h.a, "fool") && Math.random() < 0.4) continue;
-      if (Math.random() > chance) continue;
-      const attacker = Math.random() < 0.5 ? h.a : h.b;
+      if (hasHeroTag(game, h.a, "fool") && LifeRNG.random() < 0.4) continue;
+      if (LifeRNG.random() > chance) continue;
+      const attacker = LifeRNG.random() < 0.5 ? h.a : h.b;
       const loser = attacker === h.a ? h.ni : h.i;
       const loserOwner = attacker === h.a ? h.b : h.a;
-      if (hasHeroTag(game, attacker, "cruel") || Math.random() < 0.55) {
+      if (hasHeroTag(game, attacker, "cruel") || LifeRNG.random() < 0.55) {
         game.life[loser] = 0;
         game.owner[loser] = 0;
       } else {
@@ -3653,7 +3653,7 @@
       if (ownerHasCraft(game, attacker, "copper")) {
         const lx = loser % game.cols;
         const ly = (loser - lx) / game.cols;
-        const extra = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(Math.random() * 4)];
+        const extra = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(LifeRNG.random() * 4)];
         const ni = idx(game, lx + extra[0], ly + extra[1]);
         if (game.life[ni] && ownerOf(game, ni) === loserOwner) {
           game.life[ni] = 0;
@@ -3697,8 +3697,8 @@
     let best = null;
     let bestScore = -1;
     for (let attempt = 0; attempt < 90; attempt++) {
-      const x = Math.floor(Math.random() * game.cols);
-      const y = Math.floor(Math.random() * game.rows);
+      const x = Math.floor(LifeRNG.random() * game.cols);
+      const y = Math.floor(LifeRNG.random() * game.rows);
       if (!isPlantable(game, x, y)) continue;
       const i = W.idx(x, y, game.cols);
       if (game.life[i]) continue;
@@ -3729,8 +3729,8 @@
     let best = null;
     let bestScore = -1;
     for (let attempt = 0; attempt < 120; attempt++) {
-      const x = Math.floor(Math.random() * game.cols);
-      const y = Math.floor(Math.random() * game.rows);
+      const x = Math.floor(LifeRNG.random() * game.cols);
+      const y = Math.floor(LifeRNG.random() * game.rows);
       if (!isPlantable(game, x, y)) continue;
       const i = W.idx(x, y, game.cols);
       if (game.life[i]) continue;
@@ -3855,7 +3855,7 @@
   function smashRafts(game) {
     if (!game.raftCells) return;
     Object.keys(game.raftCells).forEach(function (key) {
-      if (Math.random() >= 0.22) return;
+      if (LifeRNG.random() >= 0.22) return;
       const i = Number(key);
       if (game.life) game.life[i] = 0;
       if (game.owner) game.owner[i] = 0;
@@ -3873,10 +3873,10 @@
       const i = Number(key);
       if (!game.life[i]) return;
       if (raftCount(game) >= RAFT_CAP) return;
-      if (Math.random() > 0.2) return;
+      if (LifeRNG.random() > 0.2) return;
       const x = i % game.cols;
       const y = (i - x) / game.cols;
-      const d = dirs[Math.floor(Math.random() * dirs.length)];
+      const d = dirs[Math.floor(LifeRNG.random() * dirs.length)];
       const ni = idx(game, x + d[0], y + d[1]);
       if (!(W.isShallowOcean && W.isShallowOcean(game, ni))) return;
       if (game.raftCells[ni]) return;
@@ -3943,17 +3943,17 @@
       const f = ensureFaction(game, s.owner || 0);
       const lived = f ? f.lived || 0 : 0;
       if ((s.age || 0) < 50 && lived < 50) return;
-      if (s.raftIn == null) s.raftIn = 24 + Math.floor(Math.random() * 17);
+      if (s.raftIn == null) s.raftIn = 24 + Math.floor(LifeRNG.random() * 17);
       s.raftIn -= 1;
       if (s.raftIn > 0) return;
-      s.raftIn = 24 + Math.floor(Math.random() * 17);
+      s.raftIn = 24 + Math.floor(LifeRNG.random() * 17);
       let chance = 0.08;
       if (s.trait === "expand") chance = 0.18;
       else if (s.trait === "dike") chance = 0.14;
       else if (s.trait === "climb") chance = 0.06;
       if (hasHeroTag(game, s.owner, "settle")) chance += 0.08;
       if (hasHeroTag(game, s.owner, "idle")) chance *= 0.45;
-      if (Math.random() > chance) return;
+      if (LifeRNG.random() > chance) return;
       if (raftCount(game) + RAFT_SRC.length > RAFT_CAP) return;
       const list = s.list || [];
       const origins = [];
@@ -3975,7 +3975,7 @@
       const patterns = [RAFT_SRC, RAFT_ROT];
       let placed = false;
       for (let t = 0; t < 18 && !placed; t++) {
-        const o = origins[Math.floor(Math.random() * origins.length)];
+        const o = origins[Math.floor(LifeRNG.random() * origins.length)];
         const pattern = patterns[t % patterns.length];
         const ox = W.wrap(o.x + (t % 3) - 1, game.cols);
         const oy = o.y + Math.floor(t / 6) - 1;
@@ -4008,12 +4008,12 @@
       cands.push({ s: s, w: w });
     });
     if (!cands.length) return;
-    if (Math.random() > 0.12) return;
+    if (LifeRNG.random() > 0.12) return;
     let sum = 0;
     cands.forEach(function (c) {
       sum += c.w;
     });
-    let r = Math.random() * sum;
+    let r = LifeRNG.random() * sum;
     let pick = cands[0].s;
     for (let i = 0; i < cands.length; i++) {
       r -= cands[i].w;
@@ -4028,7 +4028,7 @@
     });
     pick.hearthDropped = true;
     dropRuinFromMembers(game, pick.members, pick);
-    events.push(Math.random() < 0.5 ? "一座舊鎮荒了" : "有人離開了舊址");
+    events.push(LifeRNG.random() < 0.5 ? "一座舊鎮荒了" : "有人離開了舊址");
   }
 
   function tickPilgrimage(game, isPlantable, events) {
@@ -4036,10 +4036,10 @@
     if (!sites.length) return;
     (game.settlements || []).forEach(function (s) {
       if (s.legacy !== "rite") return;
-      if (s.riteVisitIn == null) s.riteVisitIn = 36 + Math.floor(Math.random() * 20);
+      if (s.riteVisitIn == null) s.riteVisitIn = 36 + Math.floor(LifeRNG.random() * 20);
       s.riteVisitIn -= 1;
       if (s.riteVisitIn > 0) return;
-      s.riteVisitIn = 40 + Math.floor(Math.random() * 18);
+      s.riteVisitIn = 40 + Math.floor(LifeRNG.random() * 18);
       if (landSnakeBlocked(game, s)) return;
       if (snakeBusy(game, s)) return;
       let best = null;
@@ -4072,7 +4072,7 @@
       return s.legacy === "rite" || s.legacy === "memory";
     });
     if (!tellers.length) return;
-    const s = tellers[Math.floor(Math.random() * tellers.length)];
+    const s = tellers[Math.floor(LifeRNG.random() * tellers.length)];
     const f = ensureFaction(game, s.owner || 0);
     const m = s.memory || {};
     const name = civName(f.n);
@@ -4089,18 +4089,18 @@
       if (!s.trait) return;
       if (!townTouchesSea(game, s)) return;
       if (townOnRaft(game, s)) return;
-      if (s.boatIn == null) s.boatIn = 22 + Math.floor(Math.random() * 16);
+      if (s.boatIn == null) s.boatIn = 22 + Math.floor(LifeRNG.random() * 16);
       s.boatIn -= 1;
       if (s.boatIn > 0) return;
-      s.boatIn = 22 + Math.floor(Math.random() * 16);
+      s.boatIn = 22 + Math.floor(LifeRNG.random() * 16);
       if (s.farSail) s.boatIn = Math.max(12, s.boatIn - 8);
-      if (snakeSlotFull(game) && !(s.farSail && Math.random() < 0.55)) return;
+      if (snakeSlotFull(game) && !(s.farSail && LifeRNG.random() < 0.55)) return;
       if (snakeBusy(game, s)) return;
       let chance = s.trait === "expand" ? 0.68 : s.trait === "dike" || s.trait === "sail" ? 0.48 : 0.3;
       if (s.farSail) chance += 0.22;
       if (hasHeroTag(game, s.owner, "settle")) chance += 0.12;
       if (hasHeroTag(game, s.owner, "idle")) chance *= 0.5;
-      if (Math.random() > chance) return;
+      if (LifeRNG.random() > chance) return;
       const target = pickBoatTarget(game, s, isPlantable);
       if (target && spawnSnake(game, s, target, isPlantable, "boat")) {
         const mem = s.memory || emptyMemory();
@@ -4131,16 +4131,16 @@
       if (!townTouchesSea(game, s)) return;
       if (townOnRaft(game, s)) return;
       if (fleetAtSea(game, s.owner || 0)) return;
-      if (s.fleetIn == null) s.fleetIn = 32 + Math.floor(Math.random() * 20);
+      if (s.fleetIn == null) s.fleetIn = 32 + Math.floor(LifeRNG.random() * 20);
       s.fleetIn -= 1;
       if (s.fleetIn > 0) return;
-      s.fleetIn = 40 + Math.floor(Math.random() * 22);
+      s.fleetIn = 40 + Math.floor(LifeRNG.random() * 22);
       let chance = 0.42;
       if (s.farSail) chance += 0.14;
       if (hasHeroTag(game, s.owner, "settle")) chance += 0.12;
       if (hasHeroTag(game, s.owner, "vanity")) chance += 0.1;
       if (hasHeroTag(game, s.owner, "idle")) chance *= 0.5;
-      if (Math.random() > chance) return;
+      if (LifeRNG.random() > chance) return;
       const target = pickFleetTarget(game, s, isPlantable);
       if (target && spawnFleet(game, s, target, isPlantable)) {
         events.push(civName(ensureFaction(game, s.owner || 0).n) + "派出船團");
@@ -4157,7 +4157,7 @@
       if (s.caravanIn == null) s.caravanIn = 20;
       s.caravanIn -= 1;
       if (s.caravanIn > 0) return;
-      s.caravanIn = 24 + Math.floor(Math.random() * 10);
+      s.caravanIn = 24 + Math.floor(LifeRNG.random() * 10);
       if (hasCraft(s, "wheel") || s.legacy === "market") s.caravanIn = Math.max(10, s.caravanIn - 8);
       if (hasCraft(s, "copper") || s.legacy === "market") s.caravanIn = Math.max(8, s.caravanIn - 6);
       if (landSnakeBlocked(game, s)) return;
@@ -4254,7 +4254,7 @@
       });
     });
     if (!host) return;
-    const gift = 2 + Math.floor(Math.random() * 3);
+    const gift = 2 + Math.floor(LifeRNG.random() * 3);
     spendFood(game, who, gift);
     addFood(game, host.owner || 0, gift);
     caravan.tolled = 1;
@@ -4263,7 +4263,7 @@
     game.tollTrust[key] = (game.tollTrust[key] || 0) + 1;
     if (!game.tollPeace) game.tollPeace = {};
     game.tollPeace[key] = (game.generation || 0) + 24 + Math.min(40, (game.tollTrust[key] || 1) * 8);
-    if (Math.random() < 0.6) events.push("過路留糧");
+    if (LifeRNG.random() < 0.6) events.push("過路留糧");
   }
 
   function distToWet(game, x, y) {
@@ -4467,7 +4467,7 @@
       return { o: o, w: w };
     });
     if (sum <= 0) return null;
-    let r = Math.random() * sum;
+    let r = LifeRNG.random() * sum;
     for (let i = 0; i < weights.length; i++) {
       r -= weights[i].w;
       if (r <= 0) return weights[i].o;
@@ -4490,7 +4490,7 @@
 
   function applyPlague(game, who, events, inherited) {
     const f = ensureFaction(game, who);
-    let dur = inherited || 16 + Math.floor(Math.random() * 13);
+    let dur = inherited || 16 + Math.floor(LifeRNG.random() * 13);
     let frac = 0.08;
     if (ownerHasWard(game, who)) {
       dur = Math.max(8, Math.floor(dur * 0.6));
@@ -4505,7 +4505,7 @@
   function applyFoodRot(game, who, events) {
     const f = ensureFaction(game, who);
     const have = foodOf(game, who);
-    let take = 0.55 + Math.random() * 0.2;
+    let take = 0.55 + LifeRNG.random() * 0.2;
     if (f.skills && f.skills.deep) take *= 0.65;
     if (ownerHasCraft(game, who, "pot")) take *= 0.5;
     const lost = spendFood(game, who, Math.ceil(have * take));
@@ -4525,10 +4525,10 @@
         f.plagueFrac = 0;
         return;
       }
-      if (f.plagueSpread || Math.random() > 0.18) return;
+      if (f.plagueSpread || LifeRNG.random() > 0.18) return;
       const neigh = ownersTouching(game, who);
       if (!neigh.length) return;
-      const other = neigh[Math.floor(Math.random() * neigh.length)];
+      const other = neigh[Math.floor(LifeRNG.random() * neigh.length)];
       const dest = ensureFaction(game, other);
       dest.plague = Math.max(dest.plague || 0, Math.ceil(f.plague / 2));
       dest.plagueFrac = ownerHasWard(game, other) ? 0.05 : 0.08;
@@ -4548,7 +4548,7 @@
     game.crisisIn = crisisWait();
     const who = pickCrisisVictim(game);
     if (who == null) return events;
-    if (Math.random() < 0.62) applyPlague(game, who, events, 0);
+    if (LifeRNG.random() < 0.62) applyPlague(game, who, events, 0);
     else applyFoodRot(game, who, events);
     return events;
   }
@@ -4569,16 +4569,16 @@
     const hits = [];
     for (let i = 0; i < game.life.length; i++) {
       if (!game.life[i] || !cellIsLand(game, i)) continue;
-      if (hits.length > 180 && Math.random() > 0.35) continue;
+      if (hits.length > 180 && LifeRNG.random() > 0.35) continue;
       hits.push(i);
     }
     if (!hits.length) return null;
-    return hits[Math.floor(Math.random() * hits.length)];
+    return hits[Math.floor(LifeRNG.random() * hits.length)];
   }
 
   function blowRadius(game) {
     const scale = Math.sqrt((game.cols * game.rows) / (200 * 120));
-    return Math.round((16 + Math.floor(Math.random() * 13)) * Math.max(0.85, Math.min(1.45, scale)));
+    return Math.round((16 + Math.floor(LifeRNG.random() * 13)) * Math.max(0.85, Math.min(1.45, scale)));
   }
 
   function fireRegionQuake(game, events) {
@@ -4587,7 +4587,7 @@
     const ox = at % game.cols;
     const oy = (at - ox) / game.cols;
     const r = blowRadius(game);
-    let pKill = 0.4 + Math.random() * 0.15;
+    let pKill = 0.4 + LifeRNG.random() * 0.15;
     let killed = 0;
     let seen = 0;
     for (let i = 0; i < game.life.length; i++) {
@@ -4599,7 +4599,7 @@
       let p = pKill;
       const s = game.civCells && game.civCells[i];
       if (s && (s.trait === "resist" || s.legacy === "ward")) p *= 0.78;
-      if (Math.random() >= p) continue;
+      if (LifeRNG.random() >= p) continue;
       game.life[i] = 0;
       if (game.owner) game.owner[i] = 0;
       killed += 1;
@@ -4627,7 +4627,7 @@
         if (t === TERRAIN.WATER || t === TERRAIN.RIVER) cands.push(ni);
       }
     }
-    if (cands.length) return cands[Math.floor(Math.random() * cands.length)];
+    if (cands.length) return cands[Math.floor(LifeRNG.random() * cands.length)];
     return pickLivedLand(game);
   }
 
@@ -4639,11 +4639,11 @@
     const at = pickLivedLand(game);
     const tx = at == null ? W.wrap(x + 20, game.cols) : at % game.cols;
     const ty = at == null ? y : (at - tx) / game.cols;
-    let dx = wrapDelta(x, tx, game.cols) === 0 ? (Math.random() < 0.5 ? 1 : -1) : ((tx - x + game.cols) % game.cols < game.cols / 2 ? 1 : -1);
+    let dx = wrapDelta(x, tx, game.cols) === 0 ? (LifeRNG.random() < 0.5 ? 1 : -1) : ((tx - x + game.cols) % game.cols < game.cols / 2 ? 1 : -1);
     let dy = ty === y ? 0 : ty > y ? 1 : -1;
     if (!dx && !dy) dx = 1;
-    const len = 28 + Math.floor(Math.random() * 21);
-    const half = 2 + Math.floor(Math.random() * 3);
+    const len = 28 + Math.floor(LifeRNG.random() * 21);
+    const half = 2 + Math.floor(LifeRNG.random() * 3);
     const path = {};
     for (let step = 0; step < len; step++) {
       for (let oy = -half; oy <= half; oy++) {
@@ -4655,8 +4655,8 @@
           path[W.idx(px, py, game.cols)] = 1;
         }
       }
-      if (Math.random() < 0.32) {
-        const turn = Math.random() < 0.5 ? 1 : -1;
+      if (LifeRNG.random() < 0.32) {
+        const turn = LifeRNG.random() < 0.5 ? 1 : -1;
         const ndx = dy * turn;
         const ndy = -dx * turn;
         dx = ndx;
@@ -4696,20 +4696,20 @@
       const f = game.factions[o];
       if (!f || !f.alive || !f.n) return;
       if (f.kingdom || f.empire) {
-        if (Math.random() < 0.35) scrapeOwner(game, o, 0.08);
+        if (LifeRNG.random() < 0.35) scrapeOwner(game, o, 0.08);
         return;
       }
       small.push({ o: o, w: 8 + Math.max(1, 40 - (lifeBy[o] || 0)) + ((f.hungryStreak || 0) >= 4 ? 10 : 0) });
     });
     if (!small.length) return false;
-    let n = 1 + (small.length > 3 && Math.random() < 0.45 ? 1 : 0);
+    let n = 1 + (small.length > 3 && LifeRNG.random() < 0.45 ? 1 : 0);
     events.push("諸部離散");
     while (n > 0 && small.length) {
       let sum = 0;
       small.forEach(function (s) {
         sum += s.w;
       });
-      let r = Math.random() * sum;
+      let r = LifeRNG.random() * sum;
       let pick = small[small.length - 1];
       for (let i = 0; i < small.length; i++) {
         r -= small[i].w;
@@ -4761,7 +4761,7 @@
     let pStorm = 0.4;
     if (sid === "rain" || sid === "flood") pStorm = 0.55;
     if (sid === "drought" || sid === "winter") pStorm = 0.22;
-    if (Math.random() < pStorm) fireTyphoon(game, events);
+    if (LifeRNG.random() < pStorm) fireTyphoon(game, events);
     else fireRegionQuake(game, events);
     return events;
   }
