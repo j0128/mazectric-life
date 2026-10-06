@@ -10,6 +10,7 @@ function createWindow() {
     backgroundColor: "#080a14",
     title: "生存遊戲 · Mazectric",
     autoHideMenuBar: true,
+    icon: path.join(__dirname, "app", "assets", "icon.png"),
     webPreferences: {
       // 切到別的視窗也繼續演化
       backgroundThrottling: false,

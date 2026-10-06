@@ -8,17 +8,31 @@
   "scripts": {
     "prepare-app": "node prepare.js",
     "start": "node prepare.js && electron .",
-    "dist": "node prepare.js && electron-builder --win portable --x64"
+    "dist": "node prepare.js && electron-builder --win portable --x64",
+    "dist:win": "node prepare.js && electron-builder --win portable --x64 -c.win.signAndEditExecutable=true"
   },
   "build": {
     "appId": "io.github.j0128.mazectric-life",
     "productName": "生存遊戲Mazectric",
-    "files": ["main.js", "app/**/*"],
-    "directories": { "output": "dist" },
+    "files": [
+      "main.js",
+      "app/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    },
     "win": {
-      "target": [{ "target": "portable", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "signAndEditExecutable": false,
-      "artifactName": "Mazectric-${version}-portable.exe"
+      "artifactName": "Mazectric-${version}-portable.exe",
+      "icon": "build/icon.ico"
     }
   },
   "devDependencies": {
