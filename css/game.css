@@ -1,26 +1,34 @@
 :root {
-  --bg: #10140f;
-  --bg-2: #171d16;
-  --panel: #1c241b;
-  --line: #31412e;
-  --text: #e7eedf;
-  --dim: #9aab90;
-  --accent: #b6e05a;
-  --accent-2: #7ec8a0;
-  --warn: #e0b35a;
-  --soil: #58803e;
-  --fertile: #66943a;
-  --rock: #807a6e;
-  --water: #307cac;
-  --river: #226c6a;
-  --sand: #b89862;
-  --marsh: #244e3e;
-  --grove: #103418;
-  --highland: #76705c;
-  --snow: #d6e0e8;
+  --bg: #080a14;
+  --bg-2: #0e1120;
+  --panel: #141829;
+  --panel-2: #1a1f35;
+  --line: #3a3550;
+  --gold: #d9b46a;
+  --gold-hi: #f4e2ac;
+  --gold-dim: #8c7545;
+  --text: #ece4d2;
+  --dim: #9c98ac;
+  --accent: #e6c27a;
+  --accent-2: #86c9b6;
+  --warn: #e8a860;
+  --soil: #648a46;
+  --fertile: #7ea44a;
+  --rock: #807876;
+  --water: #28649c;
+  --river: #3a869a;
+  --ice: #bad8e6;
+  --sand: #c8a464;
+  --marsh: #34605a;
+  --grove: #1e5030;
+  --highland: #8c7c64;
+  --snow: #e4ecf4;
   --cell: #f0b24a;
   --nutrient: #f0c044;
   --crystal: #7ee8ff;
+  --serif: "Noto Serif TC", "Source Han Serif TC", "Songti TC", "PMingLiU", "Cinzel", serif;
+  --display: "Cinzel", "Noto Serif TC", "Songti TC", serif;
+  --sans: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei UI", "Microsoft JhengHei", sans-serif;
 }
 
 * {
@@ -32,9 +40,14 @@
 html, body {
   height: 100%;
   overflow: hidden;
-  background: radial-gradient(1200px 700px at 20% -10%, #24301f 0%, var(--bg) 52%);
+  background:
+    radial-gradient(900px 520px at 12% -8%, rgba(217, 180, 106, 0.16) 0%, transparent 60%),
+    radial-gradient(1000px 600px at 100% 110%, rgba(70, 90, 190, 0.2) 0%, transparent 62%),
+    var(--bg);
   color: var(--text);
-  font-family: "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", sans-serif;
+  font-family: var(--sans);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
 }
 
 button, input {
@@ -657,4 +670,390 @@ button, input {
     margin-left: 0;
     width: 100%;
   }
+}
+
+
+/* ============ v4.5 · 八方旅人風格（HD-2D）============ */
+
+.title-block h1 {
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  line-height: 1.1;
+  background: linear-gradient(180deg, #fff3cc 0%, #e6c27a 48%, #a9844a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.6));
+}
+
+.title-block .ver {
+  font-family: var(--display);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--gold-dim);
+  -webkit--text-fill-color: var(--gold-dim);
+  -webkit-text-fill-color: var(--gold-dim);
+  vertical-align: 3px;
+  margin-left: 6px;
+}
+
+.title-block p {
+  font-family: var(--serif);
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  color: var(--dim);
+  margin-top: 5px;
+}
+
+.stat {
+  position: relative;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line);
+  border-top-color: var(--gold-dim);
+  border-radius: 3px;
+  padding: 7px 14px 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 235, 190, 0.07);
+}
+
+.stat::before,
+.stat::after {
+  content: "";
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  background: var(--gold);
+  transform: rotate(45deg);
+  top: 50%;
+  margin-top: -2.5px;
+  opacity: 0.0;
+}
+
+.stat-label {
+  font-family: var(--serif);
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  color: var(--gold-dim);
+  margin-bottom: 1px;
+}
+
+.stat-value {
+  font-family: var(--display);
+  font-size: 20px;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 12px rgba(230, 194, 122, 0.35);
+}
+
+.stat.climate .stat-value,
+.stat.civ .stat-value {
+  font-family: var(--serif);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.stage {
+  background: #080a14;
+  border: 1px solid var(--gold-dim);
+  border-radius: 4px;
+  box-shadow:
+    0 0 0 3px #0a0c18,
+    0 0 0 4px rgba(217, 180, 106, 0.4),
+    0 10px 36px rgba(0, 0, 0, 0.6),
+    inset 0 0 40px rgba(0, 0, 0, 0.5);
+}
+
+.toast {
+  font-family: var(--serif);
+  letter-spacing: 0.14em;
+  background: linear-gradient(180deg, rgba(30, 26, 48, 0.94), rgba(14, 12, 28, 0.94));
+  border: 1px solid var(--gold);
+  border-radius: 2px;
+  color: var(--gold-hi);
+  padding: 8px 22px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.6), 0 0 18px rgba(230, 194, 122, 0.18);
+}
+
+.side {
+  scrollbar-width: thin;
+  scrollbar-color: var(--gold-dim) transparent;
+}
+
+.panel {
+  background: linear-gradient(180deg, var(--panel-2) 0%, var(--panel) 38%);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 13px 14px 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 235, 190, 0.06);
+}
+
+.panel h2 {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  color: var(--gold-hi);
+  padding-bottom: 8px;
+  margin-bottom: 9px;
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, var(--gold), rgba(217, 180, 106, 0) 85%) 1;
+}
+
+.panel h2 button,
+.chronicle-card button,
+.toolbar button,
+.size-choices button,
+.size-resume {
+  font-family: var(--serif);
+  letter-spacing: 0.14em;
+}
+
+.panel h2 button {
+  background: transparent;
+  color: var(--gold);
+  border: 1px solid var(--gold-dim);
+  border-radius: 2px;
+  font-size: 11px;
+  padding: 3px 10px;
+  transition: all 0.15s;
+}
+
+.panel h2 button:hover {
+  background: rgba(217, 180, 106, 0.14);
+  border-color: var(--gold);
+  color: var(--gold-hi);
+}
+
+.hint,
+.legend ul {
+  font-family: var(--sans);
+  color: var(--dim);
+}
+
+.faction-item {
+  background: rgba(10, 12, 24, 0.55);
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: 2px;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.faction-item:hover {
+  background: rgba(40, 36, 64, 0.6);
+}
+
+.faction-item.focused {
+  background: linear-gradient(90deg, rgba(217, 180, 106, 0.2), rgba(20, 24, 41, 0.6));
+  box-shadow: 0 0 0 1px var(--gold), 0 0 16px rgba(217, 180, 106, 0.3);
+}
+
+.faction-head {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+}
+
+.faction-place { color: var(--gold); }
+.faction-hero { color: var(--gold-hi); }
+
+.stamp-btn,
+.gallery-item {
+  background: rgba(10, 12, 24, 0.55);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  font-family: var(--serif);
+  letter-spacing: 0.08em;
+  transition: all 0.15s;
+}
+
+.stamp-btn:hover,
+.gallery-item.found {
+  border-color: var(--gold-dim);
+}
+
+.stamp-btn:hover {
+  background: rgba(60, 50, 90, 0.5);
+}
+
+.stamp-btn.active {
+  border-color: var(--gold);
+  background: linear-gradient(90deg, rgba(217, 180, 106, 0.2), rgba(20, 24, 41, 0.5));
+  box-shadow: 0 0 14px rgba(217, 180, 106, 0.28);
+}
+
+.stamp-btn small,
+.gallery-item small {
+  font-family: var(--sans);
+  letter-spacing: 0.02em;
+}
+
+.swatch {
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 235, 190, 0.15);
+}
+
+.toolbar {
+  padding: 8px 12px;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line);
+  border-top-color: var(--gold-dim);
+  border-radius: 3px;
+  box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.4);
+}
+
+.toolbar button {
+  background: linear-gradient(180deg, #232846, #191d33);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 8px 16px;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+
+.toolbar button:hover {
+  border-color: var(--gold);
+  color: var(--gold-hi);
+  box-shadow: 0 0 12px rgba(217, 180, 106, 0.25);
+}
+
+.toolbar button.primary {
+  background: linear-gradient(180deg, #7a5d2c, #4e3a1a);
+  border-color: var(--gold);
+  color: #fff3d0;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+.toolbar button.playing {
+  background: linear-gradient(180deg, #3a2a52, #261c3a);
+  border-color: var(--gold);
+  color: var(--gold-hi);
+}
+
+.speed {
+  font-family: var(--serif);
+  letter-spacing: 0.16em;
+  color: var(--gold-dim);
+}
+
+.speed input {
+  accent-color: var(--gold);
+}
+
+.status {
+  font-family: var(--serif);
+  letter-spacing: 0.06em;
+  color: var(--dim);
+}
+
+.size-overlay,
+.chronicle {
+  background: radial-gradient(800px 500px at 50% 40%, rgba(40, 30, 70, 0.78), rgba(4, 4, 12, 0.92));
+  backdrop-filter: blur(3px);
+}
+
+.size-card {
+  position: relative;
+  background: linear-gradient(180deg, #1c2038, #121526);
+  border: 1px solid var(--gold-dim);
+  border-radius: 3px;
+  padding: 30px 32px 26px;
+  box-shadow: 0 0 0 4px #0a0c18, 0 0 0 5px rgba(217, 180, 106, 0.45), 0 24px 70px rgba(0, 0, 0, 0.7);
+  text-align: center;
+}
+
+.size-card h2 {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.4em;
+  color: var(--gold-hi);
+  margin-bottom: 10px;
+  text-shadow: 0 0 18px rgba(230, 194, 122, 0.4);
+}
+
+.size-card h2::after {
+  content: "◆";
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0;
+  color: var(--gold);
+  margin-top: 10px;
+  opacity: 0.8;
+}
+
+.size-card p {
+  font-family: var(--serif);
+  letter-spacing: 0.06em;
+  line-height: 1.8;
+}
+
+.size-choices button {
+  text-align: center;
+  background: linear-gradient(180deg, #232846, #191d33);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 13px 14px;
+  transition: all 0.15s;
+}
+
+.size-choices button:hover,
+.size-choices button.picked {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, #3a3050, #231d38);
+  box-shadow: 0 0 18px rgba(217, 180, 106, 0.25);
+}
+
+.size-choices button strong {
+  font-weight: 700;
+  color: var(--gold-hi);
+  letter-spacing: 0.2em;
+}
+
+.size-resume {
+  border: 1px solid var(--gold-dim);
+  border-radius: 2px;
+  color: var(--gold);
+  transition: all 0.15s;
+}
+
+.size-resume:hover {
+  background: rgba(217, 180, 106, 0.14);
+  color: var(--gold-hi);
+  border-color: var(--gold);
+}
+
+.chronicle-card {
+  background:
+    radial-gradient(600px 300px at 50% 0%, rgba(255, 245, 215, 0.5), transparent 70%),
+    #e9dcc0;
+  border: 1px solid #b89a62;
+  border-radius: 2px;
+  box-shadow: 0 0 0 4px #0a0c18, 0 0 0 5px rgba(217, 180, 106, 0.5), 0 24px 70px rgba(0, 0, 0, 0.7),
+    inset 0 0 60px rgba(150, 110, 50, 0.25);
+  font-family: var(--serif);
+}
+
+.chronicle-card h2 {
+  font-family: var(--serif);
+  font-size: 20px;
+  letter-spacing: 0.36em;
+  color: #3a2a1a;
+}
+
+.chronicle-card li {
+  line-height: 1.85;
+  letter-spacing: 0.03em;
+}
+
+.chronicle-card button {
+  font-family: var(--serif);
+  border-radius: 2px;
+  background: #d8c49a;
+  letter-spacing: 0.14em;
+}
+
+@media (max-width: 900px) {
+  .title-block h1 { font-size: 20px; }
 }

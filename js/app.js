@@ -47,17 +47,17 @@
   };
 
   const TERRAIN_COLOR = {
-    0: [88, 128, 62],
-    1: [102, 148, 58],
-    2: [128, 122, 110],
-    3: [48, 124, 172],
-    4: [34, 108, 106],
-    5: [176, 206, 214],
-    6: [132, 98, 62],
-    7: [36, 78, 62],
-    8: [16, 52, 24],
-    9: [118, 112, 92],
-    10: [214, 224, 232],
+    0: [100, 138, 70],
+    1: [126, 164, 74],
+    2: [128, 120, 118],
+    3: [40, 100, 156],
+    4: [58, 134, 154],
+    5: [186, 216, 230],
+    6: [200, 164, 100],
+    7: [52, 96, 82],
+    8: [30, 80, 48],
+    9: [140, 124, 100],
+    10: [228, 236, 244],
   };
 
   const SEASON_TINT = {
@@ -71,11 +71,11 @@
   const FIT_SIZE = 6;
 
   const STAIN_PALETTE = [
-    [214, 154, 58],
-    [232, 118, 86],
-    [186, 92, 148],
-    [86, 148, 214],
-    [220, 184, 92],
+    [232, 170, 66],
+    [216, 92, 78],
+    [154, 104, 198],
+    [78, 172, 198],
+    [228, 208, 116],
   ];
 
   const SIZE_KEY = "survival-life-map-size";
@@ -965,7 +965,7 @@
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
-    ctx.font = "600 " + Math.max(10, Math.round(size * 0.95)) + "px \"Microsoft JhengHei\", sans-serif";
+    ctx.font = "600 " + Math.max(10, Math.round(size * 0.95)) + "px \"Noto Serif TC\", \"Songti TC\", \"PMingLiU\", serif";
     Object.keys(byOwner).forEach(function (key) {
       const list = byOwner[key];
       list.sort(function (a, b) {
@@ -975,21 +975,167 @@
         const label = townShortName(Number(key), n + 1, list.length > 1);
         const px = L.ox + s.cx * size;
         const py = L.oy + s.cy * size - Math.max(2, size * 0.15);
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = "rgba(16, 14, 8, 0.72)";
+        ctx.lineJoin = "round";
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = "rgba(14, 10, 30, 0.82)";
         ctx.strokeText(label, px, py);
-        ctx.fillStyle = "#fff6d8";
+        ctx.shadowColor = "rgba(255, 200, 120, 0.7)";
+        ctx.shadowBlur = 6;
+        ctx.fillStyle = "#fff0c4";
         ctx.fillText(label, px, py);
+        ctx.shadowBlur = 0;
       });
     });
     ctx.restore();
+  }
+
+  // ---- HD-2D 後製：泛光、移軸模糊、暈影與黃昏色調 ----
+  const fxBuf = { a: null, b: null, mask: null };
+
+  function fxCanvas(key, w, h) {
+    let c = fxBuf[key];
+    if (!c) c = fxBuf[key] = document.createElement("canvas");
+    if (c.width !== w || c.height !== h) {
+      c.width = w;
+      c.height = h;
+    }
+    return c;
+  }
+
+  function postFx(L, size) {
+    const W = canvas.width;
+    const H = canvas.height;
+    if (W * H > 10000000 || !document.createElement) return;
+    const hasFilter = "filter" in ctx;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+
+    // 移軸：上下緣疊上模糊版本，像看一座小模型。
+    const tw = Math.max(1, Math.round(W / 3));
+    const th = Math.max(1, Math.round(H / 3));
+    const blur = fxCanvas("a", tw, th);
+    const bctx = blur.getContext("2d");
+    bctx.imageSmoothingEnabled = true;
+    bctx.drawImage(canvas, 0, 0, tw, th);
+    const mask = fxCanvas("mask", W, H);
+    const mctx = mask.getContext("2d");
+    mctx.globalCompositeOperation = "source-over";
+    mctx.clearRect(0, 0, W, H);
+    mctx.imageSmoothingEnabled = true;
+    mctx.drawImage(blur, 0, 0, W, H);
+    mctx.globalCompositeOperation = "destination-in";
+    const g = mctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "rgba(0,0,0,0.95)");
+    g.addColorStop(0.2, "rgba(0,0,0,0)");
+    g.addColorStop(0.8, "rgba(0,0,0,0)");
+    g.addColorStop(1, "rgba(0,0,0,0.95)");
+    mctx.fillStyle = g;
+    mctx.fillRect(0, 0, W, H);
+    ctx.drawImage(mask, 0, 0);
+
+    // 泛光：取亮部縮小再放大疊回。
+    const bw = Math.max(1, Math.round(W / 5));
+    const bh = Math.max(1, Math.round(H / 5));
+    const glow = fxCanvas("b", bw, bh);
+    const gctx = glow.getContext("2d");
+    gctx.imageSmoothingEnabled = true;
+    gctx.globalCompositeOperation = "source-over";
+    if (hasFilter) gctx.filter = "brightness(0.95) contrast(1.9) saturate(1.3)";
+    gctx.drawImage(canvas, 0, 0, bw, bh);
+    if (hasFilter) gctx.filter = "none";
+    ctx.globalCompositeOperation = "screen";
+    ctx.globalAlpha = 0.55;
+    ctx.drawImage(glow, 0, 0, W, H);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+
+    // 黃昏色調：左上暖金、右下冷藍。
+    const tone = ctx.createLinearGradient(0, 0, W, H);
+    tone.addColorStop(0, "rgba(255, 190, 110, 0.11)");
+    tone.addColorStop(0.5, "rgba(255, 210, 160, 0)");
+    tone.addColorStop(1, "rgba(40, 60, 150, 0.16)");
+    ctx.fillStyle = tone;
+    ctx.fillRect(0, 0, W, H);
+
+    // 暈影
+    const r = Math.hypot(W, H) / 2;
+    const vg = ctx.createRadialGradient(W / 2, H / 2, r * 0.45, W / 2, H / 2, r);
+    vg.addColorStop(0, "rgba(8, 6, 22, 0)");
+    vg.addColorStop(1, "rgba(8, 6, 22, 0.62)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+    ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
+
+    // 金色細框圈出地圖邊界
+    ctx.strokeStyle = "rgba(226, 190, 118, 0.55)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(L.ox - 0.5, L.oy - 0.5, size * game.cols + 1, size * game.rows + 1);
+  }
+
+  // 立體小景：山壁的南向岩面、樹冠與落影，讓平面地圖像一座模型。
+  function drawScenery(L, size, x0, x1, y0, y1) {
+    const T = game.terrain;
+    const cols = game.cols;
+    const rows = game.rows;
+    const lift = function (t) {
+      return t === TERRAIN.ROCK || t === TERRAIN.HIGHLAND || t === TERRAIN.SNOW;
+    };
+    const face = Math.max(2, Math.round(size * 0.42));
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        const i = world.idx(x, y, cols);
+        const t = T[i];
+        const px = L.ox + x * size;
+        const py = L.oy + y * size;
+        if (t === TERRAIN.ROCK || t === TERRAIN.HIGHLAND) {
+          if (y + 1 < rows) {
+            const below = T[world.idx(x, y + 1, cols)];
+            if (!lift(below) && !game.life[world.idx(x, y + 1, cols)]) {
+              const base = TERRAIN_COLOR[t];
+              ctx.fillStyle = "rgb(" + (base[0] * 0.5 | 0) + "," + (base[1] * 0.46 | 0) + "," + (base[2] * 0.5 | 0) + ")";
+              ctx.fillRect(px, py + size, size, face);
+              ctx.fillStyle = "rgba(255, 220, 170, 0.16)";
+              ctx.fillRect(px, py + size, size, 1);
+              ctx.fillStyle = "rgba(10, 6, 24, 0.28)";
+              ctx.fillRect(px, py + size + face, size, Math.max(1, face >> 1));
+            }
+          }
+        } else if (!game.life[i]) {
+          const h = ((x * 73 + y * 149) % 23 + 23) % 23;
+          const tree = t === TERRAIN.GROVE || ((t === TERRAIN.SOIL || t === TERRAIN.FERTILE) && h === 0);
+          if (!tree) continue;
+          const r = size * (t === TERRAIN.GROVE ? 0.52 : 0.4);
+          const cx = px + size * 0.5;
+          const cy = py + size * 0.46;
+          ctx.fillStyle = "rgba(8, 10, 30, 0.34)";
+          ctx.beginPath();
+          ctx.ellipse(cx + size * 0.14, py + size * 0.86, r * 0.95, r * 0.42, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#4a3426";
+          ctx.fillRect(cx - Math.max(0.5, size * 0.06), cy + r * 0.3, Math.max(1, size * 0.12), r * 0.8);
+          const g = t === TERRAIN.GROVE ? [26, 92, 52] : [58, 128, 62];
+          const jit = (h % 3) * 6;
+          ctx.fillStyle = "rgb(" + (g[0] + jit) + "," + (g[1] + jit) + "," + g[2] + ")";
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "rgba(190, 236, 120, 0.42)";
+          ctx.beginPath();
+          ctx.arc(cx - r * 0.3, cy - r * 0.32, r * 0.55, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
   }
 
   function draw() {
     const L = layout();
     ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
-    ctx.fillStyle = "#0b0e0a";
+    ctx.fillStyle = "#080a14";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     if (!game || L.size < 2) return;
 
@@ -1081,6 +1227,20 @@
       }
     }
 
+    if (size >= 5) drawScenery(L, size, x0, x1, y0, y1);
+    if (size >= 4) {
+      const sdx = Math.max(1, Math.round(size * 0.2));
+      const sdy = Math.max(1, Math.round(size * 0.34));
+      ctx.fillStyle = "rgba(10, 8, 28, 0.42)";
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const i = world.idx(x, y, game.cols);
+          if (!game.life[i] || (game.boatCells && game.boatCells[i])) continue;
+          ctx.fillRect(L.ox + x * size + sdx, L.oy + y * size + sdy, size, size);
+        }
+      }
+    }
+
     for (let y = y0; y < y1; y++) {
       for (let x = x0; x < x1; x++) {
         const i = world.idx(x, y, game.cols);
@@ -1138,7 +1298,17 @@
           if (game.skillCells && game.skillCells.cache[i]) color = "#f3e56a";
           ctx.fillStyle = color;
           const pad = size > 6 ? 1 : 0;
+          if (town && size >= 4) {
+            ctx.shadowColor = "rgba(255, 190, 100, 0.9)";
+            ctx.shadowBlur = size * 1.6;
+          }
           ctx.fillRect(px + pad, py + pad, size - pad * 2, size - pad * 2);
+          ctx.shadowBlur = 0;
+          if (size >= 5) {
+            const bev = Math.max(1, Math.round(size * 0.22));
+            ctx.fillStyle = "rgba(20, 8, 30, 0.3)";
+            ctx.fillRect(px + pad, py + size - pad - bev, size - pad * 2, bev);
+          }
           if (focusedOwner != null) {
             if (owner === focusedOwner) {
               ctx.fillStyle = "rgba(255, 244, 196, 0.38)";
@@ -1162,7 +1332,7 @@
             ctx.fillRect(px, py, 1, size);
             ctx.fillRect(px + size - 1, py, 1, size);
           } else if (size >= 4 && !(focusedOwner != null && owner === focusedOwner)) {
-            ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
+            ctx.fillStyle = "rgba(255, 250, 230, 0.34)";
             ctx.fillRect(px + pad, py + pad, Math.max(1, size - pad * 2 - 1), 1);
           }
         }
@@ -1262,6 +1432,7 @@
       ctx.lineWidth = 1;
     }
 
+    postFx(L, size);
     drawPlaceAuras(L, size);
     drawTownLabels(L, size);
 
