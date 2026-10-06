@@ -990,6 +990,7 @@
   }
 
   // ---- HD-2D 後製：泛光、移軸模糊、暈影與黃昏色調 ----
+  let treeList = [];
   const fxBuf = { a: null, b: null, mask: null };
 
   function fxCanvas(key, w, h) {
@@ -1075,8 +1076,30 @@
     ctx.strokeRect(L.ox - 0.5, L.oy - 0.5, size * game.cols + 1, size * game.rows + 1);
   }
 
+  // 單棵樹：落影、樹幹與樹冠；sway 是樹冠的水平位移（像素）。
+  function paintTree(tr, sway) {
+    const r = tr.r;
+    const size = tr.size;
+    ctx.fillStyle = "rgba(8, 10, 30, 0.34)";
+    ctx.beginPath();
+    ctx.ellipse(tr.cx + size * 0.14 + sway * 0.5, tr.gy, r * 0.95, r * 0.42, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#4a3426";
+    ctx.fillRect(tr.cx - Math.max(0.5, size * 0.06), tr.cy + r * 0.3, Math.max(1, size * 0.12), r * 0.8);
+    const g = tr.grove ? [26, 92, 52] : [58, 128, 62];
+    ctx.fillStyle = "rgb(" + (g[0] + tr.jit) + "," + (g[1] + tr.jit) + "," + g[2] + ")";
+    ctx.beginPath();
+    ctx.arc(tr.cx + sway, tr.cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(190, 236, 120, 0.42)";
+    ctx.beginPath();
+    ctx.arc(tr.cx + sway * 1.25 - r * 0.3, tr.cy - r * 0.32, r * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   // 立體小景：山壁的南向岩面、樹冠與落影，讓平面地圖像一座模型。
   function drawScenery(L, size, x0, x1, y0, y1) {
+    treeList = [];
     const T = game.terrain;
     const cols = game.cols;
     const rows = game.rows;
@@ -1107,25 +1130,19 @@
           const h = ((x * 73 + y * 149) % 23 + 23) % 23;
           const tree = t === TERRAIN.GROVE || ((t === TERRAIN.SOIL || t === TERRAIN.FERTILE) && h === 0);
           if (!tree) continue;
-          const r = size * (t === TERRAIN.GROVE ? 0.52 : 0.4);
-          const cx = px + size * 0.5;
-          const cy = py + size * 0.46;
-          ctx.fillStyle = "rgba(8, 10, 30, 0.34)";
-          ctx.beginPath();
-          ctx.ellipse(cx + size * 0.14, py + size * 0.86, r * 0.95, r * 0.42, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = "#4a3426";
-          ctx.fillRect(cx - Math.max(0.5, size * 0.06), cy + r * 0.3, Math.max(1, size * 0.12), r * 0.8);
-          const g = t === TERRAIN.GROVE ? [26, 92, 52] : [58, 128, 62];
-          const jit = (h % 3) * 6;
-          ctx.fillStyle = "rgb(" + (g[0] + jit) + "," + (g[1] + jit) + "," + g[2] + ")";
-          ctx.beginPath();
-          ctx.arc(cx, cy, r, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = "rgba(190, 236, 120, 0.42)";
-          ctx.beginPath();
-          ctx.arc(cx - r * 0.3, cy - r * 0.32, r * 0.55, 0, Math.PI * 2);
-          ctx.fill();
+          const tr = {
+            cx: px + size * 0.5,
+            cy: py + size * 0.46,
+            gy: py + size * 0.86,
+            r: size * (t === TERRAIN.GROVE ? 0.52 : 0.4),
+            size: size,
+            grove: t === TERRAIN.GROVE,
+            jit: (h % 3) * 6,
+            ph: (x * 0.37 + y * 0.91) % 6.28,
+            wx: x + y * 0.3,
+          };
+          if (animOn) treeList.push(tr);
+          else paintTree(tr, 0);
         }
       }
     }
@@ -1432,7 +1449,7 @@
     }
 
     collectGlints(L, size, x0, x1, y0, y1);
-    postFx(L, size);
+    if (size < 5) treeList = [];
     return true;
   }
 
@@ -1440,6 +1457,8 @@
   const sceneCache = document.createElement("canvas");
   let sceneDirty = true;
   let sceneOk = false;
+  let sceneMode = true;
+  let hoverDirty = false;
   let glints = [];
   const ANIM_KEY = "mazectric-anim";
   let animOn = true;
@@ -1450,9 +1469,28 @@
   } catch (err) {}
   const amb = { last: 0, motes: null, smoke: [], embers: [], acc: {} };
 
+  let waves = [];
+  let shore = [];
+
   function collectGlints(L, size, x0, x1, y0, y1) {
     glints = [];
+    waves = [];
+    shore = [];
     if (size < 4) return;
+    const Tw = game.terrain;
+    let seen = 0;
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        const t = Tw[world.idx(x, y, game.cols)];
+        if (t !== TERRAIN.WATER && t !== TERRAIN.RIVER) continue;
+        const ph = (x * 0.55 + y * 0.9) % 6.28;
+        const px = L.ox + x * size;
+        const py = L.oy + y * size;
+        if (t === TERRAIN.WATER && shoreWater(x, y)) shore.push({ x: px, y: py, ph: (x * 0.3 + y * 0.45) % 6.28 });
+        seen++;
+        if (seen % 2 === 0 && waves.length < 6500) waves.push({ x: px, y: py, ph: ph, r: t === TERRAIN.RIVER });
+      }
+    }
     const T = game.terrain;
     for (let y = y0; y < y1 && glints.length < 1100; y++) {
       for (let x = x0; x < x1; x++) {
@@ -1596,17 +1634,52 @@
     ctx.restore();
   }
 
+  // 會動的圖層：水波、岸邊浪沫與隨風搖擺的樹。
+  function liveLayer(L, size, now) {
+    ctx.save();
+    ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    const gust = 0.65 + 0.35 * Math.sin(now * 0.31);
+    ctx.fillStyle = "#cfeaff";
+    for (let i = 0; i < waves.length; i++) {
+      const w = waves[i];
+      const v = Math.sin(now * (w.r ? 2.6 : 1.35) + w.ph);
+      if (v < 0.5) continue;
+      ctx.globalAlpha = (v - 0.5) * 0.5 * (w.r ? 1.1 : 0.9);
+      const off = w.r ? (now * size * 1.4 + w.ph * 3) % size : size * (0.3 + 0.18 * Math.sin(now * 0.8 + w.ph));
+      ctx.fillRect(w.x + (w.r ? 0 : size * 0.08), w.y + off, w.r ? size : size * 0.84, Math.max(1, size * 0.15));
+    }
+    ctx.fillStyle = "#ffffff";
+    for (let i = 0; i < shore.length; i++) {
+      const sh = shore[i];
+      const v = 0.5 + 0.5 * Math.sin(now * 1.7 + sh.ph);
+      ctx.globalAlpha = 0.04 + 0.2 * v * v;
+      ctx.fillRect(sh.x, sh.y, size, size);
+    }
+    ctx.globalAlpha = 1;
+    for (let i = 0; i < treeList.length; i++) {
+      const tr = treeList[i];
+      const sway = Math.sin(now * 1.5 - tr.wx * 0.09 + tr.ph * 0.3) * tr.r * 0.17 * gust;
+      paintTree(tr, sway);
+    }
+    ctx.restore();
+  }
+
   function frame() {
     const L = layout();
-    if (
+    const stale =
       sceneDirty ||
       !sceneOk ||
+      sceneMode !== animOn ||
       sceneCache.width !== canvas.width ||
-      sceneCache.height !== canvas.height
-    ) {
+      sceneCache.height !== canvas.height;
+    if (stale) {
       sceneOk = renderScene(L);
       sceneDirty = false;
+      sceneMode = animOn;
       if (sceneOk) {
+        // 動畫開：快取「後製前」的底圖，每幀再疊會動的圖層與後製。關：沿用舊作法，快取成品。
+        if (!animOn) postFx(L, L.size);
         sceneCache.width = canvas.width;
         sceneCache.height = canvas.height;
         sceneCache.getContext("2d").drawImage(canvas, 0, 0);
@@ -1619,7 +1692,11 @@
     }
     if (!game || !sceneOk) return;
     const size = L.size;
-    if (animOn) ambient(L, size);
+    if (animOn) {
+      liveLayer(L, size, performance.now() / 1000);
+      postFx(L, size);
+      ambient(L, size);
+    }
     drawPlaceAuras(L, size);
     drawTownLabels(L, size);
 
@@ -1648,7 +1725,8 @@
   function animLoop(ts) {
     requestAnimationFrame(animLoop);
     if (!animOn || !game || loading || document.hidden || !sceneOk) return;
-    if (ts - animLast < animGap) return;
+    if (ts - animLast < (hoverDirty ? 33 : animGap)) return;
+    hoverDirty = false;
     animLast = ts;
     const t0 = performance.now();
     frame();
@@ -1802,7 +1880,8 @@
     if (painting || erasing) paintAt(cell, erasing);
     else {
       if (cell && !stampCells) applyInspect(cell.x, cell.y);
-      frame();
+      if (animOn) hoverDirty = true;
+      else frame();
     }
   });
 
@@ -1819,7 +1898,8 @@
     erasing = false;
     panning = false;
     canvas.style.cursor = "crosshair";
-    frame();
+    if (animOn) hoverDirty = true;
+    else frame();
   });
 
   if (factionListEl) {
@@ -1956,7 +2036,7 @@
         localStorage.setItem(ANIM_KEY, animOn ? "1" : "0");
       } catch (err) {}
       syncAnimBtn();
-      frame();
+      draw();
     });
   }
 
