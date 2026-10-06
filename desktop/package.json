@@ -1,0 +1,28 @@
+{
+  "name": "mazectric-life-desktop",
+  "version": "4.8.0",
+  "private": true,
+  "description": "生存遊戲 · Mazectric（桌面版）",
+  "author": "mazectric-life",
+  "main": "main.js",
+  "scripts": {
+    "prepare-app": "node prepare.js",
+    "start": "node prepare.js && electron .",
+    "dist": "node prepare.js && electron-builder --win portable --x64"
+  },
+  "build": {
+    "appId": "io.github.j0128.mazectric-life",
+    "productName": "生存遊戲Mazectric",
+    "files": ["main.js", "app/**/*"],
+    "directories": { "output": "dist" },
+    "win": {
+      "target": [{ "target": "portable", "arch": ["x64"] }],
+      "signAndEditExecutable": false,
+      "artifactName": "Mazectric-${version}-portable.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  }
+}
